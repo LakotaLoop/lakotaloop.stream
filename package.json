@@ -32,7 +32,7 @@
     "preview": "vite preview",
     "push": "pnpm build && gh-pages --branch main --repo git@github.com-eigendude:LakotaLoop/lakotaloop.github.io.git --dist dist --dotfiles",
     "start": "vite",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "test:ui": "vitest --ui"
   },
   "dependencies": {
