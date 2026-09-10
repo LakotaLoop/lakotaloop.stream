@@ -64,6 +64,12 @@ pnpm build
 
 This will create a production version of the app in the `dist` folder.
 
+The build uses TypeScript 7 through the `@typescript/native` npm alias, which
+provides the `tsc` command. The `typescript` dependency aliases Microsoft's
+`@typescript/typescript6` compatibility package because typescript-eslint still
+requires the TypeScript 6 compiler API. This follows Microsoft's
+[side-by-side setup](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6.0).
+
 #### Run test cases
 
 Run the test cases to ensure everything is working as expected:
