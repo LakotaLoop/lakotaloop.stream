@@ -2,7 +2,9 @@
   "name": "Lakota Loop",
   "short_name": "Lakota Loop",
   "description": "Halloween at Lakota Loop",
-  "start_url": ".",
+  "start_url": "/",
+  "id": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
@@ -16,6 +18,12 @@
       "src": "/assets/icon-512x512.png",
       "type": "image/png",
       "sizes": "512x512"
+    },
+    {
+      "src": "/assets/icon-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
