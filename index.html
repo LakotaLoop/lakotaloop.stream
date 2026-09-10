@@ -160,6 +160,29 @@
         margin-left: 5px;
         fill: currentColor;
       }
+
+      /* Pulse only the glyph during preparation; enabling Play stops it immediately. */
+      #play-button:disabled svg {
+        animation: play-glyph-pulse 2s ease-in-out infinite;
+      }
+
+      @keyframes play-glyph-pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+
+        50% {
+          opacity: 0.55;
+        }
+      }
+
+      /* Keep the glyph fully visible and still when reduced motion is preferred. */
+      @media (prefers-reduced-motion: reduce) {
+        #play-button:disabled svg {
+          animation: none;
+        }
+      }
     </style>
   </head>
   <body>
