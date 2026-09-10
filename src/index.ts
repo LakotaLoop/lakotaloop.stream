@@ -8,5 +8,5 @@
 
 import { launchApp } from "./app/launchApp";
 
-// Application entry point
+// Initialize the page's video player.
 launchApp();
