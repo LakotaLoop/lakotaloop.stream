@@ -7,7 +7,12 @@
  */
 
 import { createShakaStreamLoader } from "./createShakaStreamLoader";
-import { enterVideoFullscreen, exitVideoFullscreen } from "./fullscreen";
+import {
+  enterVideoFullscreen,
+  exitVideoFullscreen,
+  isVideoFullscreen,
+  onVideoFullscreenExit,
+} from "./fullscreen";
 
 /** Connect native video playback to a play/retry button and prepare the stream. */
 export function initializeVideoPlayer(
@@ -16,6 +21,9 @@ export function initializeVideoPlayer(
   streamUrl: string,
 ): void {
   let streamLoaded: boolean = false;
+  // Each request gets an identity so a late exit failure cannot cancel a newer
+  // transition after the user has resumed or replayed the video.
+  let pendingIdleTransition: object | null = null;
   const loadStream: () => Promise<void> = createShakaStreamLoader(
     videoElement,
     streamUrl,
@@ -24,11 +32,32 @@ export function initializeVideoPlayer(
 
   /** Return to the black screen after the video ends or playback fails. */
   function showPlayButton(): void {
+    pendingIdleTransition = null;
     // Recreate native controls on the next Play against the visible video.
     videoElement.controls = false;
     videoElement.style.visibility = "hidden";
     playButton.hidden = false;
-    exitVideoFullscreen(videoElement);
+  }
+
+  /** Preserve the browser's video surface until it finishes leaving fullscreen. */
+  function requestIdleTransition(): void {
+    if (pendingIdleTransition !== null) {
+      return;
+    }
+    if (!isVideoFullscreen(videoElement)) {
+      showPlayButton();
+      return;
+    }
+
+    const idleTransition: object = {};
+    pendingIdleTransition = idleTransition;
+    exitVideoFullscreen(videoElement, (): void => {
+      // Failed exits leave the native UI usable. A later manual exit must not
+      // apply this abandoned transition to playback that the user has resumed.
+      if (pendingIdleTransition === idleTransition) {
+        pendingIdleTransition = null;
+      }
+    });
   }
 
   /** Leave a usable retry button instead of getting stuck on a blank screen. */
@@ -40,7 +69,7 @@ export function initializeVideoPlayer(
       streamLoaded = false;
     }
     videoElement.pause();
-    showPlayButton();
+    requestIdleTransition();
     playButton.disabled = false;
     playButton.setAttribute("aria-label", "Retry video playback with sound");
     playButton.title = "Playback failed. Click to try again.";
@@ -78,14 +107,23 @@ export function initializeVideoPlayer(
     }
   }
 
+  onVideoFullscreenExit(videoElement, (): void => {
+    // Manual exits during active playback do not request an idle screen. Clear
+    // the pending state before changing the UI so duplicate signals are harmless.
+    if (pendingIdleTransition !== null) {
+      showPlayButton();
+    }
+  });
+
   // Native controls handle pause and seeking without hiding the video. Clear
   // retry messaging once playback succeeds, including a native-controls resume.
   videoElement.addEventListener("playing", (): void => {
+    pendingIdleTransition = null;
     playButton.removeAttribute("title");
     playButton.setAttribute("aria-label", "Play video with sound");
   });
   videoElement.addEventListener("ended", (): void => {
-    showPlayButton();
+    requestIdleTransition();
     // Keep Shaka's prepared stream so the next click can replay immediately.
     videoElement.currentTime = 0;
   });
@@ -94,6 +132,7 @@ export function initializeVideoPlayer(
   });
 
   playButton.addEventListener("click", (): void => {
+    pendingIdleTransition = null;
     // Firefox builds its native controls when controls is enabled. Reveal the
     // video first so the controls initialize against the visible layout.
     videoElement.style.visibility = "visible";

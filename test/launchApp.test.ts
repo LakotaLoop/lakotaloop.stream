@@ -92,12 +92,18 @@ class ButtonFixture extends EventTarget {
   }
 }
 
-interface DocumentFixture {
-  fullscreenEnabled: boolean;
-  fullscreenElement: VideoFixture | null;
-  exitFullscreen: Mock<() => Promise<void>>;
-  querySelector: Mock<(errSelector: string) => EventTarget | null>;
+/** Fullscreen transitions are reported by the document independently of requests. */
+class DocumentFixture extends EventTarget {
+  public fullscreenEnabled: boolean = true;
+  public fullscreenElement: EventTarget | null = null;
+  public exitFullscreen: Mock<() => Promise<void>> = vi
+    .fn<() => Promise<void>>()
+    .mockResolvedValue(undefined);
+  public querySelector: Mock<(errSelector: string) => EventTarget | null> =
+    vi.fn<(errSelector: string) => EventTarget | null>();
 }
+
+type FullscreenApi = "standard" | "webkit";
 
 describe("video page", (): void => {
   let video: VideoFixture;
@@ -110,12 +116,7 @@ describe("video page", (): void => {
     shakaFixture.attach.mockResolvedValue(undefined);
     shakaFixture.load.mockResolvedValue(undefined);
     shakaFixture.isBrowserSupported.mockReturnValue(true);
-    page = {
-      fullscreenEnabled: true,
-      fullscreenElement: null,
-      exitFullscreen: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-      querySelector: vi.fn<(errSelector: string) => EventTarget | null>(),
-    };
+    page = new DocumentFixture();
     vi.stubGlobal("document", page);
     video = new VideoFixture();
     video.play.mockResolvedValue(undefined);
@@ -140,6 +141,20 @@ describe("video page", (): void => {
     await vi.waitFor((): void => {
       expect(button.disabled).toBe(false);
     });
+  }
+
+  /** The browser must retain its video surface and controls during fullscreen. */
+  function expectVideoVisible(): void {
+    expect(video.style.visibility).toBe("visible");
+    expect(video.controls).toBe(true);
+    expect(button.hidden).toBe(true);
+  }
+
+  /** The inline idle state restores the page's explicit play/retry action. */
+  function expectPlayButtonVisible(): void {
+    expect(video.style.visibility).toBe("hidden");
+    expect(video.controls).toBe(false);
+    expect(button.hidden).toBe(false);
   }
 
   it("rejects a page without the required video element", (): void => {
@@ -192,7 +207,7 @@ describe("video page", (): void => {
     });
   });
 
-  it("returns from fullscreen and replays without loading the stream again", async (): Promise<void> => {
+  it("waits for the video's standard fullscreen exit before offering replay", async (): Promise<void> => {
     await prepareVideo();
     button.dispatchEvent(new Event("click"));
     page.fullscreenElement = video;
@@ -201,12 +216,63 @@ describe("video page", (): void => {
     video.dispatchEvent(new Event("ended"));
 
     expect(page.exitFullscreen).toHaveBeenCalledOnce();
-    expect(video.style.visibility).toBe("hidden");
-    expect(video.controls).toBe(false);
+    expectVideoVisible();
+
+    // Duplicate end events and fullscreen entry notifications cannot finish an
+    // outstanding exit or ask the browser to leave fullscreen a second time.
+    video.dispatchEvent(new Event("ended"));
+    page.dispatchEvent(new Event("fullscreenchange"));
+    expectVideoVisible();
+    expect(page.exitFullscreen).toHaveBeenCalledOnce();
+
+    // Another element owning fullscreen also confirms this video has exited.
+    page.fullscreenElement = button;
+    page.dispatchEvent(new Event("fullscreenchange"));
+    expectPlayButtonVisible();
     expect(video.currentTime).toBe(0);
-    expect(button.hidden).toBe(false);
+
+    page.fullscreenElement = null;
+    button.dispatchEvent(new Event("click"));
+    page.dispatchEvent(new Event("fullscreenchange"));
+    expectVideoVisible();
+    expect(video.play).toHaveBeenCalledTimes(2);
+    expect(shakaFixture.load).toHaveBeenCalledOnce();
+    expect(page.exitFullscreen).toHaveBeenCalledOnce();
+  });
+
+  it("does not treat a resolved fullscreen exit request as an exit event", async (): Promise<void> => {
+    const exitRequest: PromiseWithResolvers<void> =
+      Promise.withResolvers<void>();
+    page.exitFullscreen.mockReturnValueOnce(exitRequest.promise);
+    await prepareVideo();
+    button.dispatchEvent(new Event("click"));
+    page.fullscreenElement = video;
+    video.dispatchEvent(new Event("ended"));
+
+    // Request settlement and the browser's presentation event are independent.
+    exitRequest.resolve();
+    await exitRequest.promise;
+    expectVideoVisible();
+
+    page.fullscreenElement = null;
+    page.dispatchEvent(new Event("fullscreenchange"));
+    expectPlayButtonVisible();
+  });
+
+  it("returns inline playback to Play immediately and reuses the stream", async (): Promise<void> => {
+    await prepareVideo();
+    button.dispatchEvent(new Event("click"));
+    video.currentTime = 120;
+
+    video.dispatchEvent(new Event("ended"));
+
+    expectPlayButtonVisible();
+    expect(video.currentTime).toBe(0);
+    expect(page.exitFullscreen).not.toHaveBeenCalled();
+    expect(video.webkitExitFullscreen).not.toHaveBeenCalled();
 
     button.dispatchEvent(new Event("click"));
+    expectVideoVisible();
     expect(video.play).toHaveBeenCalledTimes(2);
     expect(shakaFixture.load).toHaveBeenCalledOnce();
   });
@@ -278,7 +344,7 @@ describe("video page", (): void => {
     expect(shakaFixture.load).toHaveBeenCalledTimes(2);
   });
 
-  it("uses iPhone video fullscreen when standard fullscreen is unavailable", async (): Promise<void> => {
+  it("waits for iPhone fullscreen exit before offering replay", async (): Promise<void> => {
     page.fullscreenEnabled = false;
     video.requestFullscreen = undefined;
     await prepareVideo();
@@ -288,8 +354,206 @@ describe("video page", (): void => {
     video.webkitDisplayingFullscreen = true;
     video.dispatchEvent(new Event("ended"));
     expect(video.webkitExitFullscreen).toHaveBeenCalledOnce();
-    expect(button.hidden).toBe(false);
+    expectVideoVisible();
+
+    // WebKit has a separate presentation event; returning from its exit method
+    // or receiving a duplicate ended event does not confirm the transition.
+    video.dispatchEvent(new Event("ended"));
+    video.webkitDisplayingFullscreen = false;
+    expectVideoVisible();
+    expect(video.webkitExitFullscreen).toHaveBeenCalledOnce();
+    video.dispatchEvent(new Event("webkitendfullscreen"));
+    expectPlayButtonVisible();
+
+    button.dispatchEvent(new Event("click"));
+    video.dispatchEvent(new Event("webkitendfullscreen"));
+    expectVideoVisible();
+    expect(video.play).toHaveBeenCalledTimes(2);
+    expect(shakaFixture.load).toHaveBeenCalledOnce();
+    expect(video.webkitExitFullscreen).toHaveBeenCalledOnce();
   });
+
+  it.each(["standard", "webkit"] as const)(
+    "keeps active playback visible after a manual %s fullscreen exit",
+    async (fullscreenApi: FullscreenApi): Promise<void> => {
+      if (fullscreenApi === "webkit") {
+        page.fullscreenEnabled = false;
+        video.requestFullscreen = undefined;
+      }
+      await prepareVideo();
+      button.dispatchEvent(new Event("click"));
+
+      // The browser's Done/Escape action changes presentation without ending
+      // playback, so it must preserve the inline video and native controls.
+      if (fullscreenApi === "standard") {
+        page.fullscreenElement = video;
+        page.dispatchEvent(new Event("fullscreenchange"));
+        page.fullscreenElement = null;
+        page.dispatchEvent(new Event("fullscreenchange"));
+      } else {
+        video.webkitDisplayingFullscreen = true;
+        video.dispatchEvent(new Event("webkitbeginfullscreen"));
+        video.webkitDisplayingFullscreen = false;
+        video.dispatchEvent(new Event("webkitendfullscreen"));
+      }
+
+      expectVideoVisible();
+      expect(video.pause).not.toHaveBeenCalled();
+      expect(page.exitFullscreen).not.toHaveBeenCalled();
+      expect(video.webkitExitFullscreen).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["reject", "throw"] as const)(
+    "keeps fullscreen usable and cancels the pending return when standard exit methods %s",
+    async (failureMode: "reject" | "throw"): Promise<void> => {
+      const exitError: Error = new Error("Fullscreen exit failed");
+      if (failureMode === "reject") {
+        page.exitFullscreen.mockRejectedValueOnce(exitError);
+      } else {
+        page.exitFullscreen.mockImplementationOnce((): Promise<void> => {
+          throw exitError;
+        });
+      }
+      await prepareVideo();
+      button.dispatchEvent(new Event("click"));
+      page.fullscreenElement = video;
+
+      video.dispatchEvent(new Event("ended"));
+
+      await vi.waitFor((): void => {
+        expect(console.warn).toHaveBeenCalledWith(
+          "Could not leave fullscreen",
+          exitError,
+        );
+      });
+      expectVideoVisible();
+
+      // A later manual exit must not finish the canceled return to Play.
+      page.fullscreenElement = null;
+      page.dispatchEvent(new Event("fullscreenchange"));
+      expectVideoVisible();
+      expect(page.exitFullscreen).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("keeps fullscreen usable and cancels the pending return when WebKit exit throws", async (): Promise<void> => {
+    const exitError: Error = new Error("Fullscreen exit failed");
+    page.fullscreenEnabled = false;
+    video.requestFullscreen = undefined;
+    video.webkitExitFullscreen.mockImplementationOnce((): void => {
+      throw exitError;
+    });
+    await prepareVideo();
+    button.dispatchEvent(new Event("click"));
+    video.webkitDisplayingFullscreen = true;
+
+    video.dispatchEvent(new Event("ended"));
+
+    expect(console.warn).toHaveBeenCalledWith(
+      "Could not leave fullscreen",
+      exitError,
+    );
+    expectVideoVisible();
+
+    video.webkitDisplayingFullscreen = false;
+    video.dispatchEvent(new Event("webkitendfullscreen"));
+    expectVideoVisible();
+    expect(video.webkitExitFullscreen).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a native-controls replay visible when an earlier exit completes", async (): Promise<void> => {
+    await prepareVideo();
+    button.dispatchEvent(new Event("click"));
+    page.fullscreenElement = video;
+    video.dispatchEvent(new Event("ended"));
+
+    // Native controls can resume before the requested fullscreen exit finishes.
+    video.dispatchEvent(new Event("playing"));
+    page.fullscreenElement = null;
+    page.dispatchEvent(new Event("fullscreenchange"));
+
+    expectVideoVisible();
+    expect(page.exitFullscreen).toHaveBeenCalledOnce();
+    expect(shakaFixture.load).toHaveBeenCalledOnce();
+  });
+
+  it("does not let an old exit rejection cancel the next replay's pending return", async (): Promise<void> => {
+    const firstExit: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+    const exitError: Error = new Error("Earlier exit request rejected");
+    page.exitFullscreen.mockReturnValueOnce(firstExit.promise);
+    await prepareVideo();
+    button.dispatchEvent(new Event("click"));
+    page.fullscreenElement = video;
+    video.dispatchEvent(new Event("ended"));
+    page.fullscreenElement = null;
+    page.dispatchEvent(new Event("fullscreenchange"));
+    expectPlayButtonVisible();
+
+    button.dispatchEvent(new Event("click"));
+    page.fullscreenElement = video;
+    video.dispatchEvent(new Event("ended"));
+
+    // Promise callbacks from the first exit may arrive after replay has ended.
+    // They must not discard the second exit's independent pending transition.
+    firstExit.reject(exitError);
+    await vi.waitFor((): void => {
+      expect(console.warn).toHaveBeenCalledWith(
+        "Could not leave fullscreen",
+        exitError,
+      );
+    });
+    expectVideoVisible();
+    page.fullscreenElement = null;
+    page.dispatchEvent(new Event("fullscreenchange"));
+
+    expectPlayButtonVisible();
+    expect(page.exitFullscreen).toHaveBeenCalledTimes(2);
+    expect(shakaFixture.load).toHaveBeenCalledOnce();
+  });
+
+  it.each(["standard", "webkit"] as const)(
+    "waits for %s fullscreen exit after a critical error before offering Retry",
+    async (fullscreenApi: FullscreenApi): Promise<void> => {
+      if (fullscreenApi === "webkit") {
+        page.fullscreenEnabled = false;
+        video.requestFullscreen = undefined;
+      }
+      await prepareVideo();
+      button.dispatchEvent(new Event("click"));
+      if (fullscreenApi === "standard") {
+        page.fullscreenElement = video;
+      } else {
+        video.webkitDisplayingFullscreen = true;
+      }
+
+      shakaFixture.player.dispatchEvent(
+        new CustomEvent("error", { detail: { severity: 2 } }),
+      );
+
+      expectVideoVisible();
+      expect(video.pause).toHaveBeenCalledOnce();
+      if (fullscreenApi === "standard") {
+        expect(page.exitFullscreen).toHaveBeenCalledOnce();
+        page.fullscreenElement = null;
+        page.dispatchEvent(new Event("fullscreenchange"));
+      } else {
+        expect(video.webkitExitFullscreen).toHaveBeenCalledOnce();
+        video.webkitDisplayingFullscreen = false;
+        video.dispatchEvent(new Event("webkitendfullscreen"));
+      }
+      expectPlayButtonVisible();
+      expect(button.attributes.get("aria-label")).toContain("Retry");
+
+      // A critical failure invalidates the prepared stream, unlike normal end.
+      button.dispatchEvent(new Event("click"));
+      await vi.waitFor((): void => {
+        expect(video.play).toHaveBeenCalledTimes(2);
+      });
+      expect(shakaFixture.load).toHaveBeenCalledTimes(2);
+      expectVideoVisible();
+    },
+  );
 
   it("continues playing inline when fullscreen is denied", async (): Promise<void> => {
     video.requestFullscreen?.mockRejectedValueOnce(
