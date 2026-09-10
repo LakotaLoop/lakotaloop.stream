@@ -8,6 +8,10 @@
 
 import { initializeVideoPlayer } from "../player/initializeVideoPlayer";
 
+// The page owns its stream choice; the player modules accept any stream URL.
+const STREAM_URL: string =
+  "https://stream.mux.com/dDkIbyl402OA1QkR3CgEMVUQltsjzF1ulB4579ff7sB8.m3u8";
+
 /** Read the page's elements and configure its video player. */
 export function launchApp(): void {
   const videoElement: HTMLVideoElement | null =
@@ -19,9 +23,5 @@ export function launchApp(): void {
     throw new Error("The video or play button is missing from the page.");
   }
 
-  // The page owns its stream choice; the player modules accept any stream URL.
-  const streamUrl: string =
-    "https://stream.mux.com/dDkIbyl402OA1QkR3CgEMVUQltsjzF1ulB4579ff7sB8.m3u8";
-
-  initializeVideoPlayer(videoElement, playButton, streamUrl);
+  initializeVideoPlayer(videoElement, playButton, STREAM_URL);
 }
