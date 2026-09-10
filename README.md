@@ -19,18 +19,19 @@ Install [nvm](https://github.com/nvm-sh/nvm) to manage Node versions:
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.4/install.sh | bash
 ```
 
-Then install the required Node version and set it as the default:
+From the repository root, install and activate the Node version selected by
+`.nvmrc`, which matches the Node 26 version used in CI:
 
 ```sh
-nvm install 24
-nvm use 24
+nvm install
+nvm use
 ```
 
 npm is installed with Node and is only used to install pnpm globally.
 
 #### pnpm setup
 
-This project uses [pnpm](https://pnpm.io/) as a package manager. If you don't have it installed, you can install it globally with:
+This project requires [pnpm](https://pnpm.io/) 12 or newer. Install it globally with:
 
 ```sh
 npm install -g pnpm
