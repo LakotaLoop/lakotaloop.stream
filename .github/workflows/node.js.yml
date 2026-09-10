@@ -28,27 +28,24 @@ jobs:
       - name: Checkout 🛎️
         uses: actions/checkout@v7
 
-      - name: Cache pnpm modules
-        id: cache-modules
-        uses: actions/cache@v6
+      # pnpm must be available before setup-node restores its package store.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
         with:
-          path: |
-            node_modules
-          key: cache-pnpm-modules-${{ matrix.os }}-${{ matrix.node-version }}-${{ hashFiles('pnpm-lock.yaml') }}
+          version: 12
+          run_install: false
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
-      - name: Install pnpm
-        run: |
-          npm install -g pnpm
-
+      # Always install from the lockfile, even when the package store is cached.
       - name: pnpm install
-        if: steps.cache-modules.outputs.cache-hit != 'true'
         run: |
-          pnpm install
+          pnpm install --frozen-lockfile
 
       - name: pnpm audit-ci
         run: |
