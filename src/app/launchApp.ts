@@ -6,7 +6,7 @@
  * See the file LICENSE.txt for more information.
  */
 
-import { initializeVideoPlayer } from "../player/initializeVideoPlayer";
+import { VideoPlayer } from "../player/VideoPlayer";
 
 // The page owns its stream choice; the player modules accept any stream URL.
 const STREAM_URL: string =
@@ -23,5 +23,10 @@ export function launchApp(): void {
     throw new Error("The video or play button is missing from the page.");
   }
 
-  initializeVideoPlayer(videoElement, playButton, STREAM_URL);
+  const player: VideoPlayer = new VideoPlayer(
+    videoElement,
+    playButton,
+    STREAM_URL,
+  );
+  player.initialize();
 }

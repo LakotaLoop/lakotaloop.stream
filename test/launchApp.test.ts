@@ -17,9 +17,11 @@ import {
 } from "vitest";
 
 import { launchApp } from "../src/app/launchApp";
+import { VideoPlayer } from "../src/player/VideoPlayer";
 
 interface ShakaFixture {
   player: EventTarget;
+  constructPlayer: Mock<() => void>;
   attach: Mock<() => Promise<void>>;
   load: Mock<() => Promise<void>>;
   isBrowserSupported: Mock<() => boolean>;
@@ -30,6 +32,7 @@ interface ShakaFixture {
 const shakaFixture: ShakaFixture = vi.hoisted((): ShakaFixture => {
   return {
     player: new EventTarget(),
+    constructPlayer: vi.fn<() => void>(),
     attach: vi.fn<() => Promise<void>>(),
     load: vi.fn<() => Promise<void>>(),
     isBrowserSupported: vi.fn<() => boolean>(),
@@ -44,6 +47,7 @@ vi.mock("shaka-player", (): object => ({
         shakaFixture.isBrowserSupported;
 
       public constructor() {
+        shakaFixture.constructPlayer();
         return Object.assign(shakaFixture.player, {
           attach: shakaFixture.attach,
           load: shakaFixture.load,
@@ -180,9 +184,96 @@ describe("video page", (): void => {
     });
   });
 
+  it("defers preparation until initialization and wires each callback only once", async (): Promise<void> => {
+    const player: VideoPlayer = new VideoPlayer(
+      video as unknown as HTMLVideoElement,
+      button as unknown as HTMLButtonElement,
+      "https://example.com/video.m3u8",
+    );
+    button.dispatchEvent(new Event("click"));
+    expect(video.play).not.toHaveBeenCalled();
+    expect(shakaFixture.isBrowserSupported).not.toHaveBeenCalled();
+    expect(shakaFixture.constructPlayer).not.toHaveBeenCalled();
+
+    player.initialize();
+    player.initialize();
+    await vi.waitFor((): void => {
+      expect(button.disabled).toBe(false);
+    });
+    player.initialize();
+    expect(shakaFixture.constructPlayer).toHaveBeenCalledOnce();
+    expect(shakaFixture.attach).toHaveBeenCalledExactlyOnceWith(video);
+    expect(shakaFixture.load).toHaveBeenCalledExactlyOnceWith(
+      "https://example.com/video.m3u8",
+    );
+    expect(shakaFixture.attach.mock.invocationCallOrder[0]).toBeLessThan(
+      shakaFixture.load.mock.invocationCallOrder[0],
+    );
+
+    button.dispatchEvent(new Event("click"));
+    expect(video.play).toHaveBeenCalledOnce();
+    expect(video.requestFullscreen).toHaveBeenCalledOnce();
+    video.dispatchEvent(new Event("error"));
+    expect(video.pause).toHaveBeenCalledOnce();
+    expect(button.attributes.get("aria-label")).toContain("Retry");
+  });
+
+  it("keeps playback and error callbacks scoped to their own player instance", async (): Promise<void> => {
+    await prepareVideo();
+    const firstShakaPlayer: EventTarget = shakaFixture.player;
+    const secondVideo: VideoFixture = new VideoFixture();
+    const secondButton: ButtonFixture = new ButtonFixture();
+    secondVideo.play.mockResolvedValue(undefined);
+    shakaFixture.player = new EventTarget();
+    const secondPlayer: VideoPlayer = new VideoPlayer(
+      secondVideo as unknown as HTMLVideoElement,
+      secondButton as unknown as HTMLButtonElement,
+      "https://example.com/second.m3u8",
+    );
+    secondPlayer.initialize();
+    await vi.waitFor((): void => {
+      expect(secondButton.disabled).toBe(false);
+    });
+
+    button.dispatchEvent(new Event("click"));
+    expect(secondVideo.play).not.toHaveBeenCalled();
+    secondButton.dispatchEvent(new Event("click"));
+    expect(secondVideo.play).toHaveBeenCalledOnce();
+    firstShakaPlayer.dispatchEvent(
+      new CustomEvent("error", { detail: { severity: 2 } }),
+    );
+    expectPlayButtonVisible();
+    expect(secondVideo.pause).not.toHaveBeenCalled();
+    expect(secondButton.hidden).toBe(true);
+
+    // The second prepared stream survives the first instance's fatal failure.
+    secondVideo.dispatchEvent(new Event("ended"));
+    secondButton.dispatchEvent(new Event("click"));
+    expect(secondVideo.play).toHaveBeenCalledTimes(2);
+    expect(shakaFixture.load).toHaveBeenCalledTimes(2);
+    shakaFixture.player.dispatchEvent(
+      new CustomEvent("error", { detail: { severity: 2 } }),
+    );
+    expect(secondVideo.pause).toHaveBeenCalledOnce();
+    expect(video.pause).toHaveBeenCalledOnce();
+    expect(secondButton.attributes.get("aria-label")).toContain("Retry");
+  });
+
   it("reveals the video and starts sound and fullscreen in the click gesture", async (): Promise<void> => {
     await prepareVideo();
     const playback: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+    // Observe the setter itself: checking only at play() would miss controls
+    // being enabled while the video's layout was still hidden.
+    let nativeControls: boolean = false;
+    Object.defineProperty(video, "controls", {
+      get: (): boolean => nativeControls,
+      set: (enabled: boolean): void => {
+        if (enabled) {
+          expect(video.style.visibility).toBe("visible");
+        }
+        nativeControls = enabled;
+      },
+    });
     video.play.mockImplementation((): Promise<void> => {
       expect(video.style.visibility).toBe("visible");
       expect(video.controls).toBe(true);
@@ -199,6 +290,9 @@ describe("video page", (): void => {
     expect(video.requestFullscreen).toHaveBeenCalledWith({
       navigationUI: "hide",
     });
+    expect(video.play.mock.invocationCallOrder[0]).toBeLessThan(
+      video.requestFullscreen!.mock.invocationCallOrder[0],
+    );
     expect(button.hidden).toBe(true);
     expect(button.disabled).toBe(true);
     playback.resolve();
@@ -329,6 +423,13 @@ describe("video page", (): void => {
       expect(video.play).toHaveBeenCalledTimes(2);
     });
     expect(shakaFixture.load).toHaveBeenCalledTimes(2);
+    expect(shakaFixture.constructPlayer).toHaveBeenCalledOnce();
+
+    // Retrying must reuse the player without attaching another error listener.
+    shakaFixture.player.dispatchEvent(
+      new CustomEvent("error", { detail: { severity: 2 } }),
+    );
+    expect(video.pause).toHaveBeenCalledTimes(2);
   });
 
   it("offers a working retry after stream preparation fails", async (): Promise<void> => {
