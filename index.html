@@ -112,6 +112,20 @@
         position: relative;
       }
 
+      /* Keep the JavaScript-disabled message readable above the app. */
+      noscript p {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        display: grid;
+        place-items: center;
+        padding: 1rem;
+        color: #ffffff;
+        background-color: #000000;
+        text-align: center;
+        line-height: 1.5;
+      }
+
       /* Contain the complete picture; unused space becomes black bars. */
       #background-video {
         position: absolute;
@@ -186,7 +200,9 @@
     </style>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript>
+      <p>You need to enable JavaScript to run this app.</p>
+    </noscript>
 
     <main id="app">
       <!-- Play reveals the video before enabling its native controls. -->
@@ -195,7 +211,7 @@
         crossorigin="anonymous"
         playsinline
         preload="auto"
-        aria-label="Background video"
+        aria-label="Halloween at Lakota Loop"
       ></video>
       <button
         id="play-button"
