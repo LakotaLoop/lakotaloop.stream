@@ -1,8 +1,8 @@
 {
-  "name": "lakotaloop.stream",
+  "name": "Lakota Loop",
   "version": "1.0.0",
   "type": "module",
-  "description": "Halloween 2025 at Lakota Loop",
+  "description": "Halloween at Lakota Loop",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LakotaLoop/lakotaloop.stream.git"

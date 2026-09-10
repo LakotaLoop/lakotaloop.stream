@@ -1,7 +1,7 @@
 {
-  "name": "lakotaloop.stream",
-  "short_name": "lakotaloop.stream",
-  "description": "Halloween 2025 at Lakota Loop",
+  "name": "Lakota Loop",
+  "short_name": "Lakota Loop",
+  "description": "Halloween at Lakota Loop",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#000000",
