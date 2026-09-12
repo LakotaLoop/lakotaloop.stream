@@ -46,17 +46,17 @@ const configuration: PlaywrightTestConfig = {
     },
     {
       name: "firefox",
-      testIgnore: "**/fullscreen-hls.spec.ts",
+      testIgnore: ["**/fullscreen-hls.spec.ts", "**/ui-fullscreen.spec.ts"],
       use: { browserName: "firefox", viewport: { width: 1440, height: 900 } },
     },
     {
       name: "webkit",
-      testIgnore: "**/fullscreen-hls.spec.ts",
+      testIgnore: ["**/fullscreen-hls.spec.ts", "**/ui-fullscreen.spec.ts"],
       use: { browserName: "webkit", viewport: { width: 1440, height: 900 } },
     },
     {
       name: "touch-portrait",
-      testIgnore: "**/fullscreen-hls.spec.ts",
+      testIgnore: ["**/fullscreen-hls.spec.ts", "**/ui-fullscreen.spec.ts"],
       use: {
         browserName: "webkit",
         viewport: { width: 390, height: 844 },
@@ -66,7 +66,7 @@ const configuration: PlaywrightTestConfig = {
     },
     {
       name: "touch-landscape",
-      testIgnore: "**/fullscreen-hls.spec.ts",
+      testIgnore: ["**/fullscreen-hls.spec.ts", "**/ui-fullscreen.spec.ts"],
       use: {
         browserName: "webkit",
         viewport: { width: 844, height: 390 },

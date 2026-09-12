@@ -102,10 +102,21 @@ button {
   position: relative;
   /* Text and card controls always paint above the floating studio mark. */
   z-index: 2;
+  /* Empty layout space must not cover the exposed studio shortcut underneath. */
+  pointer-events: none;
   padding: 4.8vw var(--page-gutter) 5vw;
   padding-left: max(var(--page-gutter), env(safe-area-inset-left));
   padding-right: max(var(--page-gutter), env(safe-area-inset-right));
   padding-bottom: max(5vw, env(safe-area-inset-bottom));
+}
+.hero-info h1,
+.movie-facts,
+.movie-description,
+#shelf-title,
+.movie-card,
+#browse-status:not(:empty) {
+  /* Visible text and movie controls retain priority over the studio shortcut. */
+  pointer-events: auto;
 }
 .hero-info {
   display: flex;
@@ -433,7 +444,7 @@ noscript p {
 
 /* Clip the full square to its inscribed circle without modifying the asset.
    Fixed positioning anchors the mark to the viewport, including while the
-   portrait library scrolls. It never sits above text or intercepts input. */
+   portrait library scrolls. Only its exposed area receives pointer input. */
 .studio-icon {
   position: fixed;
   z-index: 1;
@@ -441,10 +452,20 @@ noscript p {
   bottom: max(24px, env(safe-area-inset-bottom));
   width: var(--studio-icon-size);
   height: var(--studio-icon-size);
-  object-fit: cover;
+  padding: 0;
+  border: 0;
+  background: transparent;
   border-radius: 50%;
+  overflow: hidden;
   clip-path: circle(50% at 50% 50%);
-  pointer-events: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.studio-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* Intermediate widths need room for both real title/plot combinations, rather

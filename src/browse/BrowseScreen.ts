@@ -25,8 +25,10 @@ export class BrowseScreen {
   private readonly video: HTMLVideoElement;
   private readonly returnButton: HTMLButtonElement;
   private readonly fullscreenButton: HTMLButtonElement;
+  private readonly studioButton: HTMLButtonElement;
   private selectedMovie: Movie = movies[0];
   private playbackVisible: boolean = false;
+  private uiFullscreenPending: boolean = false;
 
   /** @brief Compose views, then prepare only the initial selected movie. */
   public constructor(private readonly page: Document) {
@@ -37,12 +39,13 @@ export class BrowseScreen {
     this.fullscreenButton = this.element(
       "fullscreen-button",
     ) as HTMLButtonElement;
+    this.studioButton = this.element("studio-fullscreen") as HTMLButtonElement;
     this.hero = new HeroView(page, movies);
     this.shelf = new MediaShelf(
       this.element("movie-shelf"),
       movies,
       (movie: Movie): void => this.select(movie),
-      (): void => this.player.start(),
+      this.startPlayback,
     );
     this.player = new VideoPlayer(
       this.video,
@@ -50,7 +53,11 @@ export class BrowseScreen {
     );
     this.page.addEventListener("keydown", this.handleKey);
     this.returnButton.addEventListener("click", this.returnToBrowse);
-    this.fullscreenButton.addEventListener("click", this.retryFullscreen);
+    this.fullscreenButton.addEventListener("click", this.startPlayback);
+    this.studioButton.addEventListener("pointerdown", this.keepMovieFocus);
+    this.studioButton.addEventListener("click", this.toggleUiFullscreen);
+    this.page.addEventListener("fullscreenchange", this.updateUiFullscreen);
+    this.updateUiFullscreen();
     this.select(this.selectedMovie);
   }
 
@@ -58,7 +65,10 @@ export class BrowseScreen {
   public async dispose(): Promise<void> {
     this.page.removeEventListener("keydown", this.handleKey);
     this.returnButton.removeEventListener("click", this.returnToBrowse);
-    this.fullscreenButton.removeEventListener("click", this.retryFullscreen);
+    this.fullscreenButton.removeEventListener("click", this.startPlayback);
+    this.studioButton.removeEventListener("pointerdown", this.keepMovieFocus);
+    this.studioButton.removeEventListener("click", this.toggleUiFullscreen);
+    this.page.removeEventListener("fullscreenchange", this.updateUiFullscreen);
     this.shelf.dispose();
     await this.player.dispose();
   }
@@ -110,8 +120,59 @@ export class BrowseScreen {
   };
 
   private readonly returnToBrowse: () => void = (): void => this.player.stop();
-  private readonly retryFullscreen: () => void = (): void =>
-    this.player.start();
+
+  /** @brief Avoid competing UI/video requests without queuing a future Play. */
+  private readonly startPlayback: () => void = (): void => {
+    if (!this.uiFullscreenPending) {
+      this.player.start();
+    }
+  };
+
+  /** @brief Pointer activation must not move native focus away from a movie. */
+  private readonly keepMovieFocus: (errEvent: PointerEvent) => void = (
+    event: PointerEvent,
+  ): void => {
+    event.preventDefault();
+  };
+
+  /** @brief Reflect browser-owned state, including Escape and video transitions. */
+  private readonly updateUiFullscreen: () => void = (): void => {
+    this.studioButton.setAttribute(
+      "aria-pressed",
+      String(this.page.fullscreenElement === this.page.documentElement),
+    );
+  };
+
+  /** @brief Toggle the page directly in the pointer gesture, leaving media idle. */
+  private readonly toggleUiFullscreen: () => Promise<void> =
+    async (): Promise<void> => {
+      if (this.playbackVisible || this.uiFullscreenPending) {
+        return;
+      }
+      const uiRoot: HTMLElement = this.page.documentElement;
+      this.uiFullscreenPending = true;
+      this.studioButton.setAttribute("aria-busy", "true");
+      try {
+        if (this.page.fullscreenElement === uiRoot) {
+          await this.page.exitFullscreen();
+        } else if (
+          this.page.fullscreenElement === null &&
+          this.page.fullscreenEnabled &&
+          typeof uiRoot.requestFullscreen === "function"
+        ) {
+          // The document root also contains the player. A movie can therefore
+          // take native fullscreen without hiding a fullscreen browse ancestor.
+          await uiRoot.requestFullscreen({ navigationUI: "hide" });
+        }
+      } catch {
+        // This optional shortcut leaves browsing intact if the browser denies
+        // fullscreen. A later gesture can try again; no movie starts implicitly.
+      } finally {
+        this.uiFullscreenPending = false;
+        this.studioButton.setAttribute("aria-busy", "false");
+        this.updateUiFullscreen();
+      }
+    };
 
   /** @brief Verify required markup once at controller construction. */
   private element(id: string): HTMLElement {

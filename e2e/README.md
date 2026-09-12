@@ -50,6 +50,8 @@ decode fails the test; it is never silently counted as successful playback.
 - Mandatory actual video-element fullscreen and actual Shaka HLS/MSE playback
   for both source identities in both Chromium projects. Failed fullscreen
   entry fails these tests; native-controls fallback cannot pass them.
+- The studio icon's browsing-fullscreen toggle through real clicks and taps,
+  exclusion from keyboard navigation, and handoff to native video fullscreen.
 - Separately labeled fullscreen-denial fault injection, corrupt media,
   missing artwork, and cancellation with late network completion.
 - Busy click/tap and Enter actions never queue playback after preparation;
@@ -58,11 +60,11 @@ decode fails the test; it is never silently counted as successful playback.
   changes, reduced motion, and complete cards above the fold in short phone
   viewports (412 × 700 and 360 × 640) before any automatic input scrolling.
 
-Normal test input uses the browser's own event ordering. Real media tests never
+Normal test input uses the browser's own event ordering. Success tests never
 replace `play()`, `pause()`, media state, fullscreen methods, or media events.
-Pause/resume/seek and fullscreen exit call the real platform APIs. Only the
-explicit denial test replaces fullscreen entry to produce an unusual failure.
-That test still decodes real media and is not fullscreen-success evidence.
+Pause/resume/seek and fullscreen exit call the real platform APIs. Explicitly
+labeled fault-injection tests deny fullscreen entry or delay its promise
+settlement. Those checks are separate from unmodified fullscreen success tests.
 
 macOS WebKit uses Option-Tab for the native button-navigation test, following
 the default Safari keyboard setting. Other projects use Tab/Shift-Tab. This

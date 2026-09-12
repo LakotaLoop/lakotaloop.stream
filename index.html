@@ -120,13 +120,24 @@
             <p id="browse-status" role="status" aria-live="polite"></p>
           </section>
         </div>
-        <img
+        <!-- Pointer-only Easter egg; keyboard and remote focus stay on movies. -->
+        <button
+          id="studio-fullscreen"
           class="studio-icon"
-          src="/assets/icon-512x512.png"
-          alt="Lakota Loop"
-          width="120"
-          height="120"
-        />
+          type="button"
+          tabindex="-1"
+          aria-label="Lakota Loop: toggle browsing fullscreen"
+          aria-pressed="false"
+          aria-busy="false"
+        >
+          <img
+            src="/assets/icon-512x512.png"
+            alt=""
+            width="120"
+            height="120"
+            draggable="false"
+          />
+        </button>
       </section>
       <section id="player-screen" aria-label="Movie playback" hidden>
         <!-- Reveal the surface before enabling native controls in VideoPlayer. -->
