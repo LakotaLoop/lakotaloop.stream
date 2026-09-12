@@ -111,12 +111,13 @@ button {
   display: flex;
   flex-direction: column;
   width: 43%;
-  min-height: 21.5vw;
+  /* Reserve one shared metadata area so changing titles keeps the shelf steady
+     without stacking empty space under the title and description separately. */
+  min-height: 16vw;
   font-size: var(--body-size);
   line-height: 1.45;
 }
 h1 {
-  min-height: 7.8vw;
   font-size: var(--title-size);
   line-height: 1.13;
   letter-spacing: -0.025em;
@@ -145,7 +146,6 @@ h1 {
   color: #eee;
 }
 .movie-description {
-  min-height: 6.8vw;
   margin-top: 1.5vw;
 }
 #movie-tagline {
@@ -156,42 +156,8 @@ h1 {
   color: var(--muted);
   white-space: pre-line;
 }
-.finish-time {
-  display: flex;
-  align-items: center;
-  margin-top: auto;
-  color: var(--muted);
-  padding-top: 0.6vw;
-}
-.clock-icon {
-  position: relative;
-  display: inline-block;
-  flex: 0 0 1.05em;
-  width: 1.05em;
-  height: 1.05em;
-  margin-right: 0.45em;
-  border-radius: 50%;
-  background: #dedede;
-}
-.clock-icon::before,
-.clock-icon::after {
-  content: "";
-  position: absolute;
-  background: #292929;
-  border-radius: 2px;
-  left: 47%;
-  top: 19%;
-  width: 8%;
-  height: 34%;
-}
-.clock-icon::after {
-  top: 45%;
-  height: 28%;
-  transform: rotate(-50deg);
-  transform-origin: 50% 10%;
-}
 .movie-library {
-  margin-top: 1.5vw;
+  margin-top: 1.25vw;
 }
 h2 {
   font-size: var(--body-size);
@@ -204,7 +170,7 @@ h2 {
 #movie-shelf {
   display: flex;
   align-items: flex-start;
-  padding: 2vw 5px 5px;
+  padding: 1.25vw 5px 5px;
   margin-left: -5px;
   margin-right: -5px;
   overflow-x: auto;
@@ -366,8 +332,8 @@ noscript p {
   color: white;
 }
 
-/* Portrait is a real flowing page, with the same readable card targets.
-   The reserved information area accommodates both current NFO descriptions. */
+/* Keep both cards and their labels above the fold on compact phone viewports.
+   Metadata still flows and can grow when text is enlarged for accessibility. */
 @media (max-width: 760px) {
   :root {
     --page-gutter: 6vw;
@@ -394,36 +360,31 @@ noscript p {
     );
   }
   .library-content {
-    padding-top: 56vw;
+    padding-top: 48vw;
   }
   .hero-info {
     width: 100%;
-    min-height: 320px;
+    min-height: 200px;
   }
   h1 {
-    min-height: 114px;
     font-size: var(--title-size);
     max-width: 560px;
   }
   .movie-facts {
-    margin-top: 12px;
+    margin-top: 10px;
   }
   .movie-description {
-    min-height: 99px;
-    margin-top: 20px;
-  }
-  .finish-time {
-    padding-top: 8px;
+    margin-top: 16px;
   }
   .movie-library {
-    margin-top: 25px;
+    margin-top: 16px;
   }
   h2 {
-    padding-bottom: 12px;
+    padding-bottom: 8px;
     max-width: none;
   }
   #movie-shelf {
-    padding-top: 24px;
+    padding-top: 16px;
   }
   .movie-card {
     margin-right: 6vw;
@@ -447,12 +408,6 @@ noscript p {
   :root {
     --title-size: 30px;
   }
-  h1 {
-    min-height: 105px;
-  }
-  .hero-info {
-    min-height: 345px;
-  }
 }
 @media (min-width: 761px) and (max-height: 600px) {
   .library-content {
@@ -460,14 +415,10 @@ noscript p {
   }
   .hero-info {
     width: 51%;
-    min-height: 310px;
+    min-height: 220px;
   }
   h1 {
     font-size: 36px;
-    min-height: 122px;
-  }
-  .movie-description {
-    min-height: 94px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -501,13 +452,7 @@ noscript p {
 @media (min-width: 761px) and (max-width: 1100px) {
   .hero-info {
     width: 55%;
-    min-height: 370px;
-  }
-  h1 {
-    min-height: 126px;
-  }
-  .movie-description {
-    min-height: 110px;
+    min-height: 225px;
   }
 }
 

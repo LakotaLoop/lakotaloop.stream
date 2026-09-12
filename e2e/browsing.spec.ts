@@ -201,7 +201,6 @@ test("both selected layouts are readable, stable, and respect reduced motion", a
 }, testInfo: TestInfo): Promise<void> => {
   const library: LibraryHarness = new LibraryHarness(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.clock.setFixedTime(new Date("2026-09-12T19:00:00.000Z"));
   await library.routeMedia(browserName === "firefox" ? "webm" : "mp4");
   await library.open();
   const shelfPositions: number[] = [];
@@ -209,9 +208,6 @@ test("both selected layouts are readable, stable, and respect reduced motion", a
   for (movieId of ["sunday-intro", "halloween-2025"]) {
     await library.activate(movieId, hasTouch);
     await library.ready(movieId);
-    await expect(page.locator("#ends-at")).toContainText(
-      movieId === "sunday-intro" ? "12:04 PM" : "12:18 PM",
-    );
     const geometry: {
       shelfTop: number;
       overflowing: boolean;

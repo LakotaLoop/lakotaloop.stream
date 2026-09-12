@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { finishTime, formatRuntime, normalizeKey } from "../src/browse/format";
+import { formatRuntime, normalizeKey } from "../src/browse/format";
 
 describe("browse display and delivered keyboard input", (): void => {
   it("normalizes legacy arrow and Enter values without aliasing browser Back", (): void => {
@@ -19,12 +19,6 @@ describe("browse display and delivered keyboard input", (): void => {
       "BrowserBack",
     );
     expect(normalizeKey({ key: "Spacebar", keyCode: 32 })).toBe(" ");
-  });
-  it("calculates finish time from actual fractional duration across midnight", (): void => {
-    const now: Date = new Date("2026-09-12T23:58:00Z");
-    expect(finishTime(now, 254.287375).toISOString()).toBe(
-      "2026-09-13T00:02:14.287Z",
-    );
   });
   it("rounds measured runtime to the nearest second without inventing minutes", (): void => {
     expect(formatRuntime(254.287375)).toBe("4 min 14 sec");

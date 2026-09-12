@@ -33,11 +33,6 @@ export function normalizeKey(event: { key: string; keyCode: number }): string {
   );
 }
 
-/** @brief Derive a finish instant without changing the caller's wall clock. */
-export function finishTime(now: Date, durationSeconds: number): Date {
-  return new Date(now.getTime() + durationSeconds * 1000);
-}
-
 /** @brief Display measured runtime at a readable whole-second precision. */
 export function formatRuntime(durationSeconds: number): string {
   const seconds: number = Math.round(durationSeconds);

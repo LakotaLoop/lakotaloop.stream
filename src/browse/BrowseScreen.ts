@@ -49,7 +49,6 @@ export class BrowseScreen {
       (snapshot: PlayerSnapshot): void => this.onPlayerState(snapshot),
     );
     this.page.addEventListener("keydown", this.handleKey);
-    this.page.addEventListener("visibilitychange", this.updateClock);
     this.returnButton.addEventListener("click", this.returnToBrowse);
     this.fullscreenButton.addEventListener("click", this.retryFullscreen);
     this.select(this.selectedMovie);
@@ -58,10 +57,8 @@ export class BrowseScreen {
   /** @brief Dispose each actual owner, removing page listeners during HMR or teardown. */
   public async dispose(): Promise<void> {
     this.page.removeEventListener("keydown", this.handleKey);
-    this.page.removeEventListener("visibilitychange", this.updateClock);
     this.returnButton.removeEventListener("click", this.returnToBrowse);
     this.fullscreenButton.removeEventListener("click", this.retryFullscreen);
-    this.hero.dispose();
     this.shelf.dispose();
     await this.player.dispose();
   }
@@ -115,8 +112,6 @@ export class BrowseScreen {
   private readonly returnToBrowse: () => void = (): void => this.player.stop();
   private readonly retryFullscreen: () => void = (): void =>
     this.player.start();
-  private readonly updateClock: () => void = (): void =>
-    this.hero.updateClock();
 
   /** @brief Verify required markup once at controller construction. */
   private element(id: string): HTMLElement {

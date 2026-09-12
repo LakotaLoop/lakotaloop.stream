@@ -55,7 +55,8 @@ decode fails the test; it is never silently counted as successful playback.
 - Busy click/tap and Enter actions never queue playback after preparation;
   retrying the same failed movie restores readiness and requires a fresh Play action.
 - Stable shelf/card alignment, both selected artwork states, tablet title
-  changes, reduced motion, and finish times under a fixed wall clock.
+  changes, reduced motion, and complete cards above the fold in short phone
+  viewports (412 × 700 and 360 × 640) before any automatic input scrolling.
 
 Normal test input uses the browser's own event ordering. Real media tests never
 replace `play()`, `pause()`, media state, fullscreen methods, or media events.
@@ -106,8 +107,8 @@ Each selected-layout test saves `sunday-intro.png` and `halloween-2025.png`
 under its project directory in `test-results/`; Chromium also saves an 820 px
 tablet image. The suite checks geometric invariants rather than accepting
 unchecked pixel baselines. Inspect these images when changing composition.
-`page.clock.setFixedTime()` fixes wall time without replacing running media
-timers. There are no arbitrary sleeps or test retries.
+Portrait tests also save both selections at each compact viewport size.
+There are no arbitrary sleeps or test retries.
 
 Failures retain screenshots and Playwright traces in `test-results/` and an
 HTML report in `playwright-report/`. Both directories are ignored by Git.
