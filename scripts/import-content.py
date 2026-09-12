@@ -65,7 +65,8 @@ def parse_nfo(path: Path) -> dict[str, str]:
         elements: list[ET.Element] = root.findall(field)
         if len(elements) != 1 or len(elements[0]) != 0:
             raise ValueError(f"Expected one plain-text {field} field: {path}")
-        value: str = (elements[0].text or "").strip().replace("[CR]", "\n")
+        # Kodi's layout markers become spaces so website text wraps naturally.
+        value: str = (elements[0].text or "").strip().replace("[CR]", " ")
         if field != "tagline" and not value:
             raise ValueError(f"Required {field} field is empty: {path}")
         metadata[field] = value

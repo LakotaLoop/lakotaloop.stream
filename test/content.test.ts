@@ -102,7 +102,7 @@ describe("deterministic content import", (): void => {
       id: "sunday-intro",
       title: "Exact & complete title",
       tagline: "",
-      plot: "First\nSecond",
+      plot: "First Second",
       durationSeconds: 2.5,
       width: 256,
       height: 144,

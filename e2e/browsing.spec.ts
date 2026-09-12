@@ -24,13 +24,9 @@ test("startup has real metadata, paired artwork, and no automatic playback", asy
   await library.open();
   await expect(page.locator("#movie-title")).toHaveText("Sunday Intro");
   await expect(page.locator("#movie-tagline")).toHaveText("Thank you!");
-  await expect(page.locator("#movie-plot")).toHaveText(
-    "99 hard-working actors. We appreciate your hard,\namazing work.",
-    { useInnerText: true },
-  );
-  await expect(page.locator("#movie-plot")).toHaveCSS(
-    "white-space",
-    "pre-line",
+  await expect(page.locator("#movie-plot")).toHaveJSProperty(
+    "textContent",
+    "99 hard-working actors. We appreciate your hard, amazing work.",
   );
   await expect(library.card("sunday-intro")).toHaveAccessibleName(
     "Select Sunday Intro",

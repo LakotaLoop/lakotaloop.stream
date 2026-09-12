@@ -7,7 +7,7 @@ copied into `public`, Git, or the production build.
 Run `pnpm import:content` when the publishing metadata or exact artwork changes.
 The optional preparation command requires Python 3.10+ and `ffprobe` on `PATH`.
 It validates both movies before writing output, reads the NFO fields as plain
-text, converts `[CR]` to a newline, rejects XML declarations that can introduce
+text, converts legacy Kodi `[CR]` markers to spaces, rejects XML declarations that can introduce
 entities, and records the actual MP4 duration and first video stream dimensions.
 Empty taglines remain empty. It copies the specified JPEG bytes without edits.
 

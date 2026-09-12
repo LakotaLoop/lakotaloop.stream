@@ -39,7 +39,7 @@ decode fails the test; it is never silently counted as successful playback.
 
 - Chromium, Firefox, and WebKit desktop browsing/input.
 - WebKit touch at 390×844 and 844×390, and Chromium keyboard input at 1920×1080.
-- Both real titles, descriptions, artwork pairings, the `[CR]` line break,
+- Both real titles, descriptions, artwork pairings, naturally wrapping plot text,
   empty tagline, no autoplay, and no parallel preparation of both movies.
 - Initial and other-card first-tap behavior, pointer-generated focus,
   rapid source changes, mixed keyboard/pointer input, arrow boundaries,
