@@ -46,7 +46,7 @@ export class HeroView {
     tagline.textContent = movie.tagline;
     tagline.hidden = movie.tagline.length === 0;
     this.element("movie-resolution").textContent =
-      movie.width >= 3840 ? "4K" : movie.width >= 1920 ? "FHD" : "HD";
+      movie.width >= 3840 ? "4K" : movie.width >= 1920 ? "1080p" : "HD";
     this.element("movie-runtime").textContent = formatRuntime(
       movie.durationSeconds,
     );
