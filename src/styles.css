@@ -477,6 +477,165 @@ noscript p {
   }
 }
 
+/* Near-square windows have room for a full-width hero and two generous cards.
+   Anchor the composition toward the bottom instead of scaling a TV layout only
+   by width and leaving most of the available height unused. */
+@media (min-aspect-ratio: 2/3) and (max-aspect-ratio: 3/2) {
+  :root {
+    --title-size: clamp(30px, 4.4vw, 72px);
+    --body-size: clamp(16px, 1.8vw, 28px);
+  }
+  #hero-artwork {
+    left: 0;
+    height: min(64vh, 80vw);
+    height: min(64svh, 80vw);
+    max-height: none;
+  }
+  #hero-artwork img {
+    object-position: center top;
+  }
+  #hero-artwork::after {
+    background:
+      linear-gradient(90deg, rgba(0, 0, 0, 0.6), transparent 75%),
+      linear-gradient(0deg, #000 0%, rgba(0, 0, 0, 0.7) 35%, transparent 85%);
+  }
+  .library-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 100vh;
+    min-height: 100svh;
+    padding-top: max(24px, env(safe-area-inset-top));
+    padding-bottom: max(8vh, env(safe-area-inset-bottom));
+    padding-bottom: max(8svh, env(safe-area-inset-bottom));
+  }
+  .hero-info {
+    position: relative;
+    width: 80%;
+    min-height: clamp(180px, 21vw, 340px);
+  }
+  .hero-info::before {
+    /* A soft local backdrop keeps metadata legible over text-heavy intro art. */
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: -24px -32px;
+    background: rgba(0, 0, 0, 0.86);
+    filter: blur(24px);
+    pointer-events: none;
+  }
+  h1 {
+    font-size: var(--title-size);
+    max-width: none;
+  }
+  .movie-library {
+    margin-top: 16px;
+  }
+  h2 {
+    max-width: none;
+  }
+  .movie-card {
+    /* Flex distributes the actual safe-area-adjusted row width evenly. */
+    flex: 1 1 0;
+    min-width: 0;
+    width: 0;
+    margin-right: 3vw;
+  }
+  .card-title {
+    font-size: clamp(16px, 1.7vw, 28px);
+  }
+  #browse-status:empty {
+    min-height: 0;
+    margin-top: 0;
+  }
+}
+
+/* A phone in landscape has very little usable height once browser chrome is
+   visible. Put metadata beside the shelf so neither must scroll below the other.
+   Minimum height still allows the page to grow for enlarged accessibility text. */
+@media (max-height: 500px) and (min-aspect-ratio: 3/2) {
+  :root {
+    --page-gutter: 3vw;
+    --title-size: clamp(22px, 3.2vw, 30px);
+    --body-size: 14px;
+    --card-radius: 12px;
+    --focus-width: 3px;
+  }
+  #hero-artwork {
+    left: 25%;
+    height: 100%;
+    max-height: none;
+  }
+  #hero-artwork::after {
+    background:
+      linear-gradient(90deg, #000, rgba(0, 0, 0, 0.55) 65%),
+      linear-gradient(0deg, #000, transparent 75%);
+  }
+  .library-content {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    column-gap: 3vw;
+    align-items: center;
+    min-height: 100vh;
+    min-height: 100svh;
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  .hero-info {
+    width: auto;
+    min-height: 0;
+    line-height: 1.4;
+  }
+  .hero-info::before {
+    content: none;
+  }
+  h1 {
+    font-size: var(--title-size);
+    max-width: none;
+  }
+  .movie-facts {
+    margin-top: 8px;
+  }
+  .movie-description {
+    margin-top: 12px;
+  }
+  .movie-library {
+    min-width: 0;
+    margin-top: 0;
+  }
+  h2 {
+    max-width: none;
+    padding-bottom: 8px;
+  }
+  #movie-shelf {
+    padding-top: 12px;
+  }
+  .movie-card {
+    flex: 1 1 0;
+    min-width: 0;
+    width: 0;
+    margin-right: 16px;
+  }
+  .card-title {
+    font-size: 14px;
+    margin-top: 8px;
+  }
+  .play-triangle {
+    border-top-width: 12px;
+    border-bottom-width: 12px;
+    border-left-width: 20px;
+    margin-left: 4px;
+  }
+  .card-action {
+    font-size: 14px;
+    margin-top: 8px;
+  }
+  #browse-status:empty {
+    min-height: 0;
+    margin-top: 0;
+  }
+}
+
 /* Keep the final real card's outline inside the shelf's padded viewport. */
 .movie-card:last-child {
   margin-right: 0;

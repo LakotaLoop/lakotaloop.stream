@@ -59,6 +59,10 @@ decode fails the test; it is never silently counted as successful playback.
 - Stable shelf/card alignment, both selected artwork states, tablet title
   changes, reduced motion, and complete cards above the fold in short phone
   viewports (412 × 700 and 360 × 640) before any automatic input scrolling.
+- Short phone landscape viewports (840 × 300, 915 × 412, and 760 × 300) show
+  both complete cards at startup and after selection, without text overlap or
+  horizontal overflow. These reserve space for browser chrome through a smaller
+  CSS viewport; they do not simulate the physical browser toolbar itself.
 
 Normal test input uses the browser's own event ordering. Success tests never
 replace `play()`, `pause()`, media state, fullscreen methods, or media events.
