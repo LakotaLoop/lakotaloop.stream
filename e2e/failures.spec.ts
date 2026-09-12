@@ -26,7 +26,7 @@ test("missing artwork leaves metadata, selection, and Play usable", async ({
     });
   });
   await library.open();
-  await library.activate("halloween-2025", false);
+  await library.select("halloween-2025", false);
   await expect(page.locator("#movie-title")).toHaveText(
     "Lakota Loop Halloween 2025 Rough Cut",
   );
@@ -55,13 +55,13 @@ test("corrupt media exposes a retryable card and another movie remains playable"
     },
   );
   await library.open();
-  await library.activate("halloween-2025", false);
+  await library.select("halloween-2025", false);
   await expect(
     library.card("halloween-2025").locator(".card-action"),
   ).toContainText("Retry");
   await expect(page.locator("#browse-screen")).toBeVisible();
   expect((await library.videoState()).paused).toBe(true);
-  await library.activate("sunday-intro", false);
+  await library.select("sunday-intro", false);
   await library.ready("sunday-intro");
   await library.activate("sunday-intro", false);
   await library.playing(320);
@@ -87,7 +87,7 @@ test("fault injection: fullscreen denial retains real native playback and a reac
   const library: LibraryHarness = new LibraryHarness(page);
   await library.routeMedia(browserName === "firefox" ? "webm" : "mp4");
   await library.open();
-  await library.activate("sunday-intro", false);
+  await library.select("sunday-intro", false);
   await library.ready("sunday-intro");
   await library.activate("sunday-intro", false);
   await library.playing(320);
@@ -124,11 +124,15 @@ test("late media preparation cannot replace a newer selection or start its audio
   );
   try {
     await library.open();
-    await library.activate("sunday-intro", false);
+    await library.select("sunday-intro", false);
     await expect(
       library.card("sunday-intro").locator(".card-action"),
-    ).toContainText("Preparing");
-    await library.activate("halloween-2025", false);
+    ).toHaveText("Play");
+    await expect(library.card("sunday-intro")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await library.select("halloween-2025", false);
     releaseRequest();
     await library.ready("halloween-2025");
     await expect(page.locator("#movie-title")).toHaveText(

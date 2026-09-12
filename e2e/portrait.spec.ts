@@ -43,7 +43,7 @@ portraitViewports.forEach(
         );
       let movieId: string;
       for (movieId of ["halloween-2025", "sunday-intro"]) {
-        await library.activate(movieId, hasTouch);
+        await library.select(movieId, hasTouch);
         await library.ready(movieId);
         await expect(library.card("sunday-intro")).toBeInViewport({ ratio: 1 });
         await expect(library.card("halloween-2025")).toBeInViewport({

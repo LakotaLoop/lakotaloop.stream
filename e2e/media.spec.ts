@@ -22,7 +22,7 @@ test("real decoded media pauses, resumes, seeks, ends, and replays the selected 
   const library: LibraryHarness = new LibraryHarness(page);
   await library.routeMedia(browserName === "firefox" ? "webm" : "mp4");
   await library.open();
-  await library.activate("halloween-2025", hasTouch);
+  await library.select("halloween-2025", hasTouch);
   await library.ready("halloween-2025");
   await library.activate("halloween-2025", hasTouch);
   await library.playing(426);
@@ -72,7 +72,7 @@ test("real decoded media pauses, resumes, seeks, ends, and replays the selected 
     await page.locator("#return-button").click();
   }
   await library.returned("halloween-2025");
-  await library.activate("sunday-intro", hasTouch);
+  await library.select("sunday-intro", hasTouch);
   await library.ready("sunday-intro");
   await library.activate("sunday-intro", hasTouch);
   await library.playing(320);

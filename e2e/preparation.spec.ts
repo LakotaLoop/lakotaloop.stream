@@ -6,7 +6,13 @@
  * See the file LICENSE.txt for more information.
  */
 
-import { expect, type Page, type Route, test } from "@playwright/test";
+import {
+  expect,
+  type Page,
+  type Route,
+  test,
+  type TestInfo,
+} from "@playwright/test";
 
 import { LibraryHarness, type VideoState } from "./LibraryHarness";
 
@@ -50,14 +56,19 @@ test("activating a preparing card never queues playback after its bytes arrive",
           );
         });
       });
-    await library.activate("sunday-intro", hasTouch);
+    await library.select("sunday-intro", hasTouch);
     await expect(library.card("sunday-intro")).toHaveAttribute(
       "aria-busy",
       "true",
     );
     await expect(
       library.card("sunday-intro").locator(".card-action"),
-    ).toHaveText("Preparing…");
+    ).toHaveText("Play");
+    // A long preparation gains its own delayed indicator while the action label
+    // remains stable. Observe the indicator rather than sleeping for its timer.
+    await expect(
+      library.card("sunday-intro").locator(".card-loading"),
+    ).toBeVisible();
 
     // Neither a deliberate second tap/click nor Enter during preparation may
     // be stored and executed later, after the original user gesture has expired.
@@ -70,6 +81,9 @@ test("activating a preparing card never queues playback after its bytes arrive",
       "aria-busy",
       "false",
     );
+    await expect(
+      library.card("sunday-intro").locator(".card-loading"),
+    ).toBeHidden();
     await expect(page.locator("#browse-screen")).toBeVisible();
     await expect(page.locator("#player-screen")).toBeHidden();
     await expect(page.locator("#video-player")).toHaveAttribute(
@@ -92,5 +106,97 @@ test("activating a preparing card never queues playback after its bytes arrive",
     expect(library.failedAssets).toEqual([]);
   } finally {
     releaseMedia();
+  }
+});
+
+test("preparation notice waits before appearing and restarts its delay for a different source", async ({
+  page,
+  browserName,
+  hasTouch,
+}: {
+  page: Page;
+  browserName: string;
+  hasTouch: boolean;
+}, testInfo: TestInfo): Promise<void> => {
+  const library: LibraryHarness = new LibraryHarness(page);
+  await page.setViewportSize({ width: 844, height: 390 });
+  // Reduced motion must not bypass the separate JavaScript notice delay.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await library.routeMedia(browserName === "firefox" ? "webm" : "mp4");
+  // Control only JavaScript time while both real fixture responses are held.
+  // Resume normal timers before letting Shaka complete actual media loading.
+  await page.clock.install({ time: 0 });
+  await page.clock.pauseAt(1000);
+  let releaseMedia: () => void = (): void => {};
+  const mediaGate: Promise<void> = new Promise((resolve: () => void): void => {
+    releaseMedia = resolve;
+  });
+  await page.route("**/__fixtures/*", async (route: Route): Promise<void> => {
+    await mediaGate;
+    await route.continue().catch((): void => {
+      // Switching sources can legitimately cancel a held request.
+    });
+  });
+
+  try {
+    await library.open();
+    await library.select("halloween-2025", hasTouch);
+    await expect(library.card("halloween-2025")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await expect(
+      library.card("halloween-2025").locator(".card-action"),
+    ).toHaveText("Play");
+    await expect(
+      library.card("halloween-2025").locator(".card-loading"),
+    ).toBeHidden();
+    await page.clock.runFor(399);
+    await expect(
+      library.card("halloween-2025").locator(".card-loading"),
+    ).toBeHidden();
+    await page.clock.runFor(1);
+    await expect(
+      library.card("halloween-2025").locator(".card-loading"),
+    ).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath("delayed-loading-notice.png"),
+    });
+
+    // An already visible notice belongs to its source. Hovering/tapping another
+    // movie must start a new quiet interval, not carry the old source's flag.
+    await library.select("sunday-intro", hasTouch);
+    await expect(library.card("sunday-intro")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await expect(
+      library.card("halloween-2025").locator(".card-loading"),
+    ).toBeHidden();
+    await expect(
+      library.card("sunday-intro").locator(".card-loading"),
+    ).toBeHidden();
+    await page.clock.runFor(399);
+    await expect(
+      library.card("sunday-intro").locator(".card-loading"),
+    ).toBeHidden();
+    await page.clock.runFor(1);
+    await expect(
+      library.card("sunday-intro").locator(".card-loading"),
+    ).toBeVisible();
+
+    releaseMedia();
+    await page.clock.resume();
+    await library.ready("sunday-intro");
+    await expect(
+      library.card("sunday-intro").locator(".card-loading"),
+    ).toBeHidden();
+    await expect(page.locator("#browse-screen")).toBeVisible();
+    expect((await library.videoState()).paused).toBe(true);
+    expect((await library.videoState()).width).toBe(320);
+    expect(library.errors).toEqual([]);
+  } finally {
+    releaseMedia();
+    await page.clock.resume();
   }
 });

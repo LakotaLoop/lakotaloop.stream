@@ -48,7 +48,7 @@ test("retry prepares the same failed movie without playing until a fresh Play ac
       });
     });
 
-  await library.activate("halloween-2025", hasTouch);
+  await library.select("halloween-2025", hasTouch);
   await expect(
     library.card("halloween-2025").locator(".card-action"),
   ).toHaveText("Retry");

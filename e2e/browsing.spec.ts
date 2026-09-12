@@ -83,7 +83,7 @@ test("startup has real metadata, paired artwork, and no automatic playback", asy
   expect(library.failedAssets).toEqual([]);
 });
 
-test("first pointer/touch activation selects; second deliberate activation plays the correct source", async ({
+test("hover or a first touch selects; deliberate Play starts the correct source", async ({
   page,
   browserName,
   hasTouch,
@@ -95,7 +95,12 @@ test("first pointer/touch activation selects; second deliberate activation plays
   const library: LibraryHarness = new LibraryHarness(page);
   await library.routeMedia(browserName === "firefox" ? "webm" : "mp4");
   await library.open();
-  await library.activate("halloween-2025", hasTouch);
+  if (hasTouch) {
+    // A touch-generated focus/click sequence must still select on its first tap.
+    await library.activate("halloween-2025", true);
+  } else {
+    await library.select("halloween-2025", false);
+  }
   await expect(page.locator("#movie-title")).toHaveText(
     "Lakota Loop Halloween 2025 Rough Cut",
   );
@@ -122,12 +127,16 @@ test("initial preview also needs selection before play, and fast selection keeps
   const library: LibraryHarness = new LibraryHarness(page);
   await library.routeMedia(browserName === "firefox" ? "webm" : "mp4");
   await library.open();
-  await library.activate("sunday-intro", hasTouch);
+  if (hasTouch) {
+    await library.activate("sunday-intro", true);
+  } else {
+    await library.select("sunday-intro", false);
+  }
   await expect(page.locator("#browse-screen")).toBeVisible();
   expect((await library.videoState()).paused).toBe(true);
-  await library.activate("halloween-2025", hasTouch);
-  await library.activate("sunday-intro", hasTouch);
-  await library.activate("halloween-2025", hasTouch);
+  await library.select("halloween-2025", hasTouch);
+  await library.select("sunday-intro", hasTouch);
+  await library.select("halloween-2025", hasTouch);
   await expect(page.locator("#movie-title")).toHaveText(
     "Lakota Loop Halloween 2025 Rough Cut",
   );
@@ -202,7 +211,7 @@ test("both selected layouts are readable, stable, and respect reduced motion", a
   const shelfPositions: number[] = [];
   let movieId: string;
   for (movieId of ["sunday-intro", "halloween-2025"]) {
-    await library.activate(movieId, hasTouch);
+    await library.select(movieId, hasTouch);
     await library.ready(movieId);
     const geometry: {
       shelfTop: number;
@@ -273,14 +282,14 @@ test("both selected layouts are readable, stable, and respect reduced motion", a
   );
   if (browserName === "chromium") {
     await page.setViewportSize({ width: 820, height: 1180 });
-    await library.activate("sunday-intro", false);
+    await library.select("sunday-intro", false);
     const firstTop: number = await library
       .card("sunday-intro")
       .evaluate(
         (card: HTMLElement): number =>
           card.getBoundingClientRect().top + window.scrollY,
       );
-    await library.activate("halloween-2025", false);
+    await library.select("halloween-2025", false);
     const secondTop: number = await library
       .card("sunday-intro")
       .evaluate(
@@ -340,7 +349,7 @@ test("switching pointer and keyboard keeps the selected movie and native focus a
   await library.open();
   await page.keyboard.press("ArrowLeft");
   await expect(library.card("sunday-intro")).toBeFocused();
-  await library.activate("halloween-2025", hasTouch);
+  await library.select("halloween-2025", hasTouch);
   await expect(library.card("halloween-2025")).toBeFocused();
   await expect(page.locator("#movie-title")).toHaveText(
     "Lakota Loop Halloween 2025 Rough Cut",
@@ -348,7 +357,7 @@ test("switching pointer and keyboard keeps the selected movie and native focus a
   expect((await library.videoState()).paused).toBe(true);
   await library.ready("halloween-2025");
   if (!hasTouch) {
-    await library.card("sunday-intro").hover();
+    await page.mouse.move(0, 0);
     await expect(page.locator("#movie-title")).toHaveText(
       "Lakota Loop Halloween 2025 Rough Cut",
     );

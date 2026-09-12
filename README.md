@@ -6,11 +6,13 @@ with sound and the browser's native controls. Natural completion, Stop/Return, o
 leaving an established video fullscreen session returns to the same selected card.
 Ordinary Pause and buffering keep the player open.
 
-Mouse and touch use two deliberate activations: select, then Play. The initially
-previewed movie is also unarmed. Arrow keys or Tab focus select and expose Play;
-Enter/Space activate once. Preparation is shown on the card and never queues an
-automatic fullscreen request. If fullscreen is denied, the in-page native video
-controls, Return to movies, and Enter fullscreen actions remain reachable.
+Mouse movement over a card selects and focuses it; one click plays the ready
+movie. Touch uses two deliberate taps: select, then Play. The initially previewed
+movie starts unarmed. Arrow keys or Tab focus select and expose Play; Enter/Space
+activate once. The Play label stays steady during background preparation, with a
+small notice for slower loading. Activating a busy card never queues playback or
+fullscreen. If fullscreen is denied, the in-page native video controls, Return to
+movies, and Enter fullscreen actions remain reachable.
 
 ## Development
 

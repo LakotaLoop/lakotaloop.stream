@@ -44,6 +44,8 @@ decode fails the test; it is never silently counted as successful playback.
 - Initial and other-card first-tap behavior, pointer-generated focus,
   rapid source changes, mixed keyboard/pointer input, arrow boundaries,
   native button Space/Enter, repeated Enter, and modifier shortcuts.
+- Real mouse hover selects and focuses without playing; a subsequent click plays.
+  A parked mouse preserves keyboard selection and the selected movie after Return.
 - Actual MP4/available WebM decoding, differing video dimensions,
   advancing `currentTime`, audible configuration, pause/resume, seeking,
   genuine natural completion, replay, return, and source switching.
@@ -56,6 +58,7 @@ decode fails the test; it is never silently counted as successful playback.
   missing artwork, and cancellation with late network completion.
 - Busy click/tap and Enter actions never queue playback after preparation;
   retrying the same failed movie restores readiness and requires a fresh Play action.
+  The Play label stays stable while a delayed loading notice clears on readiness.
 - Stable shelf/card alignment, both selected artwork states, tablet title
   changes, reduced motion, and complete cards above the fold in short phone
   viewports (412 × 700 and 360 × 640) before any automatic input scrolling.

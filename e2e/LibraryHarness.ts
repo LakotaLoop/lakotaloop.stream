@@ -161,6 +161,15 @@ export class LibraryHarness {
     return this.page.locator(`.movie-card[data-movie-id="${movieId}"]`);
   }
 
+  /** @brief Select without activating Play: real mouse hover or an initial touch tap. */
+  public async select(movieId: string, touch: boolean): Promise<void> {
+    if (touch) {
+      await this.card(movieId).tap();
+    } else {
+      await this.card(movieId).hover();
+    }
+  }
+
   /** @brief Use an actual tap on touch projects, otherwise a locator click. */
   public async activate(movieId: string, touch: boolean): Promise<void> {
     if (touch) {
@@ -172,6 +181,9 @@ export class LibraryHarness {
 
   /** @brief Await the observable ready affordance without arbitrary timing sleeps. */
   public async ready(movieId: string): Promise<void> {
+    // Play remains visually stable while its source prepares; aria-busy is the
+    // readiness boundary, so the label alone cannot authorize a test click.
+    await expect(this.card(movieId)).toHaveAttribute("aria-busy", "false");
     await expect(this.card(movieId).locator(".card-action")).toHaveText("Play");
     await expect(this.card(movieId)).toHaveAttribute("aria-label", /^Play /);
   }

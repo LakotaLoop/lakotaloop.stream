@@ -21,6 +21,9 @@ export class MediaShelf {
   private armed: boolean = false;
   private pointerIntent: { index: number; wasArmed: boolean } | null = null;
   private pointerFocus: boolean = false;
+  private lastMousePosition: { x: number; y: number } | null = null;
+  private preparationIndicatorTimer: number | null = null;
+  private showPreparation: boolean = false;
   private snapshot: PlayerSnapshot = {
     state: "idle",
     sourceId: null,
@@ -42,12 +45,37 @@ export class MediaShelf {
     movies.forEach((movie: Movie, index: number): void =>
       this.createCard(movie, index),
     );
+    // Track movement across the whole document, including the player. Layout
+    // changes under a parked mouse must not undo keyboard selection or Return.
+    const page: Document = this.container.ownerDocument;
+    page.addEventListener("pointermove", this.handleMouseMove, {
+      passive: true,
+    });
+    this.cleanups.push((): void =>
+      page.removeEventListener("pointermove", this.handleMouseMove),
+    );
     this.render();
   }
 
   /** @brief Reflect preparation without disabling navigation or queuing playback. */
   public update(snapshot: PlayerSnapshot): void {
+    const preparationChanged: boolean =
+      this.snapshot.state !== snapshot.state ||
+      this.snapshot.sourceId !== snapshot.sourceId;
     this.snapshot = snapshot;
+    if (preparationChanged) {
+      this.clearPreparationIndicator();
+      if (snapshot.state === "preparing") {
+        // Fast background preparation stays visually quiet. A slow connection
+        // gets a separate notice without replacing or shifting the Play action.
+        this.preparationIndicatorTimer =
+          this.container.ownerDocument.defaultView!.setTimeout((): void => {
+            this.preparationIndicatorTimer = null;
+            this.showPreparation = true;
+            this.render();
+          }, 400);
+      }
+    }
     this.render();
   }
 
@@ -111,7 +139,62 @@ export class MediaShelf {
 
   /** @brief Remove listeners owned by the shelf before replacing its controller. */
   public dispose(): void {
+    this.clearPreparationIndicator();
     this.cleanups.forEach((cleanup: () => void): void => cleanup());
+  }
+
+  /** @brief Adopt real mouse movement as navigation, never as a Play gesture. */
+  private readonly handleMouseMove: (errEvent: PointerEvent) => void = (
+    event: PointerEvent,
+  ): void => {
+    // Touch can generate pointer boundary events and compatibility clicks. It
+    // retains its deliberate first-tap selection without being armed by hover.
+    if (event.pointerType !== "mouse") {
+      return;
+    }
+    const previousPosition: { x: number; y: number } | null =
+      this.lastMousePosition;
+    this.lastMousePosition = { x: event.clientX, y: event.clientY };
+    if (
+      (previousPosition?.x === event.clientX &&
+        previousPosition.y === event.clientY) ||
+      event.buttons !== 0 ||
+      this.snapshot.state === "playing" ||
+      this.snapshot.state === "stopping" ||
+      this.container.getClientRects().length === 0
+    ) {
+      return;
+    }
+    const path: EventTarget[] = event.composedPath();
+    const index: number = this.cards.findIndex(
+      (card: HTMLButtonElement): boolean => path.includes(card),
+    );
+    if (index < 0) {
+      return;
+    }
+    const card: HTMLButtonElement = this.cards[index];
+    if (
+      this.selectedIndex === index &&
+      this.armed &&
+      this.container.ownerDocument.activeElement === card
+    ) {
+      return;
+    }
+    this.pointerFocus = false;
+    this.pointerIntent = null;
+    this.select(index);
+    card.focus({ preventScroll: true });
+  };
+
+  /** @brief Retire the previous source's notice on readiness, replacement, or disposal. */
+  private clearPreparationIndicator(): void {
+    if (this.preparationIndicatorTimer !== null) {
+      this.container.ownerDocument.defaultView!.clearTimeout(
+        this.preparationIndicatorTimer,
+      );
+      this.preparationIndicatorTimer = null;
+    }
+    this.showPreparation = false;
   }
 
   /** @brief Create normal buttons and safe text nodes, keeping artwork geometry fixed. */
@@ -137,7 +220,11 @@ export class MediaShelf {
     triangle.className = "play-triangle";
     const action: HTMLSpanElement = page.createElement("span");
     action.className = "card-action";
-    overlay.append(triangle, action);
+    const loading: HTMLSpanElement = page.createElement("span");
+    loading.className = "card-loading";
+    loading.title = "Preparing…";
+    loading.hidden = true;
+    overlay.append(triangle, action, loading);
     artwork.append(image, overlay);
     const title: HTMLSpanElement = page.createElement("span");
     title.className = "card-title";
@@ -213,7 +300,14 @@ export class MediaShelf {
   private activate(index: number, shouldPlay: boolean): void {
     const alreadySelected: boolean = this.selectedIndex === index;
     this.select(index);
-    if (shouldPlay && alreadySelected && this.snapshot.state !== "preparing") {
+    if (shouldPlay && alreadySelected) {
+      if (this.snapshot.state === "preparing") {
+        // An explicit busy activation gets immediate feedback, but is never
+        // queued to start playback or request fullscreen after the gesture ends.
+        this.showPreparation = true;
+        this.render();
+        return;
+      }
       this.onPlay();
     }
   }
@@ -223,19 +317,25 @@ export class MediaShelf {
     this.cards.forEach((card: HTMLButtonElement, index: number): void => {
       const selected: boolean = index === this.selectedIndex;
       const readyIntent: boolean = selected && this.armed;
-      const busy: boolean = selected && this.snapshot.state === "preparing";
-      const error: boolean = selected && this.snapshot.state === "error";
+      const currentSource: boolean =
+        selected && this.snapshot.sourceId === this.movies[index].id;
+      const busy: boolean =
+        currentSource && this.snapshot.state === "preparing";
+      const error: boolean = currentSource && this.snapshot.state === "error";
       card.classList.toggle("is-selected", selected);
       card.classList.toggle("is-armed", readyIntent);
       card.setAttribute("aria-pressed", String(selected));
       card.setAttribute("aria-busy", String(busy));
       card.setAttribute(
         "aria-label",
-        `${readyIntent ? "Play" : "Select"} ${this.movies[index].title}`,
+        `${!readyIntent ? "Select" : busy ? "Preparing" : error ? "Retry" : "Play"} ${this.movies[index].title}`,
       );
       const action: HTMLElement =
         card.querySelector<HTMLElement>(".card-action")!;
-      action.textContent = busy ? "Preparing…" : error ? "Retry" : "Play";
+      action.textContent = error ? "Retry" : "Play";
+      const loading: HTMLElement =
+        card.querySelector<HTMLElement>(".card-loading")!;
+      loading.hidden = !readyIntent || !busy || !this.showPreparation;
     });
   }
 }

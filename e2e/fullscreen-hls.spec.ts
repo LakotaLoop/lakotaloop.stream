@@ -21,7 +21,7 @@ test("Play enters actual video fullscreen and Shaka decodes the selected HLS str
   const library: LibraryHarness = new LibraryHarness(page);
   await library.routeMedia("hls");
   await library.open();
-  await library.activate("sunday-intro", false);
+  await library.select("sunday-intro", false);
   await library.ready("sunday-intro");
   await library.activate("sunday-intro", false);
   await expect
@@ -43,7 +43,7 @@ test("Play enters actual video fullscreen and Shaka decodes the selected HLS str
   await library.returned("sunday-intro");
   expect((await library.videoState()).fullscreen).toBe(false);
 
-  await library.activate("halloween-2025", false);
+  await library.select("halloween-2025", false);
   await library.ready("halloween-2025");
   await library.activate("halloween-2025", false);
   await expect

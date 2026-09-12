@@ -97,7 +97,7 @@ test.describe("touch browsing fullscreen", (): void => {
     const library: LibraryHarness = new LibraryHarness(page);
     await library.routeMedia("mp4");
     await library.open();
-    await library.activate("halloween-2025", true);
+    await library.select("halloween-2025", true);
     await library.ready("halloween-2025");
     const studioIcon: Locator = page.locator(".studio-icon");
     await studioIcon.tap();
@@ -129,7 +129,7 @@ test("browsing fullscreen hands off to real video fullscreen and the icon works 
   const library: LibraryHarness = new LibraryHarness(page);
   await library.routeMedia("mp4");
   await library.open();
-  await library.activate("halloween-2025", false);
+  await library.select("halloween-2025", false);
   await library.ready("halloween-2025");
   const studioIcon: Locator = page.locator(".studio-icon");
   await studioIcon.click();
@@ -212,7 +212,7 @@ test("fault injection: pending browsing fullscreen requires a fresh Play after s
   const library: LibraryHarness = new LibraryHarness(page);
   await library.routeMedia("mp4");
   await library.open();
-  await library.activate("halloween-2025", false);
+  await library.select("halloween-2025", false);
   await library.ready("halloween-2025");
   const studioIcon: Locator = page.locator(".studio-icon");
 

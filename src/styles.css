@@ -261,6 +261,24 @@ h2 {
   font-weight: 700;
   margin-top: 0.6em;
 }
+/* Keep the delayed spinner clear of Play even on the smallest portrait cards.
+   The button's accessible name supplies the corresponding preparation state. */
+.card-loading {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: clamp(12px, 1vw, 20px);
+  height: clamp(12px, 1vw, 20px);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: preparation-spin 0.8s linear infinite;
+}
+@keyframes preparation-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 #browse-status {
   min-height: 1.5em;
   max-width: 44rem;
@@ -268,11 +286,6 @@ h2 {
   font-size: 17px;
   line-height: 1.5;
   margin-top: 1.5rem;
-}
-@media (hover: hover) {
-  .movie-card:hover .card-title {
-    color: #fff;
-  }
 }
 
 /* In-page presentation is the accessible fallback if native fullscreen is

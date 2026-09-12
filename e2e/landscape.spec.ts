@@ -135,7 +135,7 @@ landscapeSizes.forEach((size: { width: number; height: number }): void => {
     // source, so this remains a browsing regression rather than a Play request.
     let movieId: string;
     for (movieId of ["halloween-2025", "sunday-intro"]) {
-      await library.activate(movieId, hasTouch);
+      await library.select(movieId, hasTouch);
       await library.ready(movieId);
       const selectedLayout: LandscapeLayout = await readLandscapeLayout(page);
       expectVisibleLandscape(selectedLayout);
