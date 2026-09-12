@@ -52,6 +52,8 @@ decode fails the test; it is never silently counted as successful playback.
   entry fails these tests; native-controls fallback cannot pass them.
 - Separately labeled fullscreen-denial fault injection, corrupt media,
   missing artwork, and cancellation with late network completion.
+- Busy click/tap and Enter actions never queue playback after preparation;
+  retrying the same failed movie restores readiness and requires a fresh Play action.
 - Stable shelf/card alignment, both selected artwork states, tablet title
   changes, reduced motion, and finish times under a fixed wall clock.
 

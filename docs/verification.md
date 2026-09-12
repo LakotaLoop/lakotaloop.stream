@@ -13,7 +13,7 @@ mappings are configured; see [exact content/source mapping](content.md).
 | Final `pnpm lint`                                                            | Passed                                                                           |
 | Final `pnpm build`                                                           | Passed                                                                           |
 | Final `pnpm test`                                                            | 58 passed: 36 player fault cases, 19 import/HTTP cases, 3 display/input cases    |
-| `PLAYWRIGHT_BROWSERS_PATH=/private/tmp/lakotaloop-playwright pnpm test:e2e`  | 80 passed across all six browser projects; no skips or retries                   |
+| `PLAYWRIGHT_BROWSERS_PATH=/private/tmp/lakotaloop-playwright pnpm test:e2e`  | 92 passed across all six browser projects; no skips or retries                   |
 | Additional focused startup/artwork/layout run after strengthening assertions | 18 passed across all six projects                                                |
 | `pnpm audit-ci`                                                              | Passed; zero reported vulnerabilities                                            |
 | Source-artwork SHA256 comparison                                             | All four copied JPEGs match exact source bytes                                   |
@@ -24,6 +24,18 @@ initially needed the execution environment's sandbox escalation. The successful
 runs above used the permitted network/browser environment. No tests disabled
 browser autoplay protections. The existing large Shaka chunk still produces
 Vite's informational bundle-size warning.
+
+## Follow-up regression coverage
+
+Added two browser scenarios, each executed across all six projects:
+
+- Click/tap and Enter while preparation is busy never queue playback. Real media
+  becomes ready silently; only a fresh Play action starts it.
+- The same movie recovers from corrupt media through Retry, retains its selection,
+  and requires a fresh Play action before decoding and playing the correct source.
+
+The complete follow-up run passed lint, build, 58 unit/HTTP tests, and 92 browser
+tests in 52.3 seconds without retries or skips. Production behavior was unchanged.
 
 ## Real local originals
 
