@@ -16,6 +16,7 @@
   --card-width: 21.4vw;
   --card-radius: 18px;
   --focus-width: 4px;
+  --studio-icon-size: clamp(80px, 6vw, 120px);
   --body-size: clamp(17px, 1.48vw, 30px);
   --title-size: clamp(36px, 3.4vw, 72px);
   font-family: Arial, Helvetica, sans-serif;
@@ -45,6 +46,7 @@ button {
 
 #browse-screen {
   position: relative;
+  z-index: 0;
   min-height: 100vh;
   min-height: 100svh;
   overflow: hidden;
@@ -98,6 +100,8 @@ button {
 
 .library-content {
   position: relative;
+  /* Text and card controls always paint above the floating studio mark. */
+  z-index: 2;
   padding: 4.8vw var(--page-gutter) 5vw;
   padding-left: max(var(--page-gutter), env(safe-area-inset-left));
   padding-right: max(var(--page-gutter), env(safe-area-inset-right));
@@ -298,6 +302,7 @@ h2 {
    denied. Native transport controls remain on the video in both presentations. */
 #player-screen {
   position: fixed;
+  z-index: 3;
   top: 0;
   right: 0;
   bottom: 0;
@@ -475,23 +480,20 @@ noscript p {
   }
 }
 
-/* The existing studio image is masked in CSS; its original asset stays intact. */
+/* Clip the full square to its inscribed circle without modifying the asset.
+   Fixed positioning anchors the mark to the viewport, including while the
+   portrait library scrolls. It never sits above text or intercepts input. */
 .studio-icon {
-  position: absolute;
-  right: var(--page-gutter);
-  bottom: max(28px, env(safe-area-inset-bottom));
-  width: clamp(56px, 4.5vw, 88px);
-  height: clamp(56px, 4.5vw, 88px);
+  position: fixed;
+  z-index: 1;
+  right: max(24px, env(safe-area-inset-right));
+  bottom: max(24px, env(safe-area-inset-bottom));
+  width: var(--studio-icon-size);
+  height: var(--studio-icon-size);
   object-fit: cover;
   border-radius: 50%;
-}
-@media (max-width: 760px) {
-  .library-content {
-    padding-bottom: 100px;
-  }
-  .studio-icon {
-    bottom: max(22px, env(safe-area-inset-bottom));
-  }
+  clip-path: circle(50% at 50% 50%);
+  pointer-events: none;
 }
 
 /* Intermediate widths need room for both real title/plot combinations, rather
