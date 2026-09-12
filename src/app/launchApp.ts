@@ -6,27 +6,9 @@
  * See the file LICENSE.txt for more information.
  */
 
-import { VideoPlayer } from "../player/VideoPlayer";
+import { BrowseScreen } from "../browse/BrowseScreen";
 
-// The page owns its stream choice; the player modules accept any stream URL.
-const STREAM_URL: string =
-  "https://stream.mux.com/dDkIbyl402OA1QkR3CgEMVUQltsjzF1ulB4579ff7sB8.m3u8";
-
-/** Read the page's elements and configure its video player. */
-export function launchApp(): void {
-  const videoElement: HTMLVideoElement | null =
-    document.querySelector<HTMLVideoElement>("#background-video");
-  const playButton: HTMLButtonElement | null =
-    document.querySelector<HTMLButtonElement>("#play-button");
-
-  if (videoElement === null || playButton === null) {
-    throw new Error("The video or play button is missing from the page.");
-  }
-
-  const player: VideoPlayer = new VideoPlayer(
-    videoElement,
-    playButton,
-    STREAM_URL,
-  );
-  player.initialize();
+/** @brief Launch the data-driven library and return its explicit lifecycle owner. */
+export function launchApp(): BrowseScreen {
+  return new BrowseScreen(document);
 }

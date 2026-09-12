@@ -73,11 +73,30 @@ export default [
     },
   },
 
+  // Local tooling runs in Node; it never becomes a deployed browser resource.
+  {
+    files: ["scripts/**/*.js", "e2e/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+        Buffer: "readonly",
+        URL: "readonly",
+        console: "readonly",
+      },
+    },
+  },
+
   // 4) Turn off any ESLint rules that conflict with Prettier
   prettierConfig,
 
   // 5) Ignore build output and lockfiles
   {
-    ignores: ["dist", "node_modules", "pnpm-lock.yaml"],
+    ignores: [
+      "dist",
+      "node_modules",
+      "pnpm-lock.yaml",
+      "playwright-report",
+      "test-results",
+    ],
   },
 ];

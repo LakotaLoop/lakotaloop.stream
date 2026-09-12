@@ -1,104 +1,104 @@
 # lakotaloop.stream
 
-A minimal video page: a black screen with a centered play button. Click play
-to enter fullscreen and start the video with sound. The picture stays centered, with black
-bars wherever the viewport and video proportions differ. When the video ends,
-fullscreen closes and the initial play button returns, ready to replay from the
-beginning. Shaka Player handles all stream playback,
-with the browser's built-in controls for pausing, seeking, volume, and fullscreen.
+An artwork-led library for Sunday Intro and Lakota Loop Halloween 2025 Rough Cut.
+Select a movie to see its artwork and information; activate its Play card to watch
+with sound and the browser's native controls. Natural completion, Stop/Return, or
+leaving an established video fullscreen session returns to the same selected card.
+Ordinary Pause and buffering keep the player open.
 
-### Getting started
+Mouse and touch use two deliberate activations: select, then Play. The initially
+previewed movie is also unarmed. Arrow keys or Tab focus select and expose Play;
+Enter/Space activate once. Preparation is shown on the card and never queues an
+automatic fullscreen request. If fullscreen is denied, the in-page native video
+controls, Return to movies, and Enter fullscreen actions remain reachable.
 
-Follow the steps below to get the app up and running in no time.
+## Development
 
-#### Node setup (NVM and npm)
-
-Install [nvm](https://github.com/nvm-sh/nvm) to manage Node versions:
-
-```sh
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.4/install.sh | bash
-```
-
-From the repository root, install and activate the Node version selected by
-`.nvmrc`, which matches the Node 26 version used in CI:
+Use the Node version in `.nvmrc` (Node 26) and pnpm 12 or newer:
 
 ```sh
 nvm install
 nvm use
-```
-
-npm is installed with Node and is only used to install pnpm globally.
-
-#### pnpm setup
-
-This project requires [pnpm](https://pnpm.io/) 12 or newer. Install it globally with:
-
-```sh
-npm install -g pnpm
-```
-
-#### Project setup
-
-Run the following command to install the dependencies of the app:
-
-```sh
 pnpm install
-```
-
-#### Build and run in development mode
-
-Run the app in development mode, and listen on all network interfaces:
-
-```sh
 pnpm dev
 ```
 
-This command uses Vite to fire up a local server, with Hot Reloading support. Visit the provided link in your web browser to see the app in action.
-
-#### Build the app for production
-
-Create an optimized and minified version of the app:
+Development serves only the two explicitly mapped original MP4 files over HTTP,
+with seeking support. It does not copy movies into the repository or public assets.
+See [content preparation and exact mappings](docs/content.md). Normal builds and
+CI use committed metadata/JPEGs and never need Desktop or ffprobe.
 
 ```sh
+pnpm import:content  # Optional: refresh exact NFO/JPEG/ffprobe data locally
 pnpm build
+pnpm preview
 ```
 
-This will create a production version of the app in the `dist` folder.
+The static production build uses separate verified Mux HLS URLs. Both movies have
+production mappings. Shaka is loaded lazily and retained across HLS source changes;
+only the selected source is prepared. No full-movie uploads or deployment are part
+of content import or tests.
 
-The build uses TypeScript 7 through the `@typescript/native` npm alias, which
-provides the `tsc` command. The `typescript` dependency aliases Microsoft's
-`@typescript/typescript6` compatibility package because typescript-eslint still
-requires the TypeScript 6 compiler API. This follows Microsoft's
-[side-by-side setup](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6.0).
+The build retains TypeScript 7 through `@typescript/native`, with the TypeScript 6
+compiler API alias required by typescript-eslint. PWA metadata, manifest and icons
+remain intact; the existing 512-pixel icon is also the circular studio mark.
 
-#### Run test cases
-
-Run the test cases to ensure everything is working as expected:
-
-```sh
-pnpm test
-```
-
-#### Run the linter
-
-Run the linter to check for code quality and style issues:
+## Verification
 
 ```sh
 pnpm lint
-```
-
-#### Run the formatter
-
-Run the formatter to ensure code is formatted consistently:
-
-```sh
-pnpm format
-```
-
-#### Audit new dependencies
-
-After adding new dependencies, check for security issues with:
-
-```sh
+pnpm build
+pnpm test
+pnpm exec playwright install --with-deps chromium firefox webkit
+pnpm test:e2e
+pnpm test:e2e:headed
 pnpm audit-ci
 ```
+
+Browser tests build and serve the actual production output with tiny local media
+fixtures substituted at the network/source-data boundary. They require no Mux
+availability, personal credentials, original movies, or ffmpeg installation. Fixture
+generation, codec choices, screenshots and coverage are documented in
+[e2e/README.md](e2e/README.md). Vitest and Playwright discovery are separate. CI
+retains lint/build/audit/unit jobs and adds browser installation/testing with failure
+traces and screenshots. Generated reports are ignored by Git.
+
+Use scoped Prettier/ESLint fixes for changed files when other work is in progress.
+`pnpm format` is available for an intentional repository-wide formatting pass.
+
+## Browser compatibility and architecture
+
+The production JavaScript/CSS syntax target is Chromium 80, Firefox 78, Safari 14
+or newer. This is a compatibility floor for browser syntax, not a claim that every
+television, codec or fullscreen implementation has been hardware-tested. Modern
+Chromium-based TV browsers are intended candidates; actual device testing remains
+necessary. Samsung's [engine table](https://developer.samsung.com/smarttv/develop/specifications/web-engine-specifications.html)
+shows why TV engines need explicit targets rather than assuming desktop recency.
+
+Shaka installs its compatibility polyfills and checks actual browser capability;
+see its [support matrix](https://github.com/shaka-project/shaka-player#platform-and-browser-support-matrix).
+The native Fullscreen API is feature-detected, with WebKit's separate video-fullscreen
+path preserved. [Fullscreen requires transient user activation](https://developer.mozilla.org/en-US/docs/Web/API/Element/requestFullscreen),
+so no import, load or promise is awaited before the Play action requests it.
+
+Layout uses flowing DOM/CSS, safe-area padding, a percentage-ratio card fallback,
+and `100vh` before newer viewport units. No CSS aspect-ratio, flex-gap, framework,
+canvas renderer or vendor TV API is required. Reduced motion is respected.
+
+`BrowseScreen` composes `HeroView`, `MediaShelf` and one `VideoPlayer`.
+`ShakaStreamLoader` serializes/cancels source preparation and `VideoFullscreen`
+tracks actual entry/exit separately from request promises. Imported XML becomes
+plain typed data and is rendered with text nodes, never arbitrary HTML.
+
+Legacy DOM arrow/Space names and unidentified numeric arrow/Enter values are
+normalized in `src/browse/format.ts`. MediaStop/Back are handled only when delivered
+during playback. Root browser history and modified keyboard shortcuts are left to
+the browser. Shelf keys stand down while native media controls own interaction.
+
+The shelf is a flex row with existing overflow capability; adding more real titles
+later can extend focus visibility there. No carousel, invented library, general
+spatial-navigation framework or TV SDK is included.
+
+A 1920×1080 keyboard test is a TV interaction simulation. WebKit touch projects
+simulate input and layout; they do not establish native iPhone fullscreen or
+physical smart-TV support.

@@ -13,134 +13,219 @@ type FullscreenVideoElement = HTMLVideoElement & {
   webkitDisplayingFullscreen?: boolean;
 };
 
+/** @brief Browser presentation events are distinct from request settlement. */
+interface FullscreenCallbacks {
+  onEnter: () => void;
+  onExit: () => void;
+  onEntrySettled: () => void;
+  onFailure: (errOperation: "enter" | "exit") => void;
+}
+
 /**
- * @brief Manage fullscreen presentation and exit notifications for one video.
+ * @brief Own the standard and WebKit fullscreen lifecycle for one video element.
  *
- * Requests and actual browser exit events are distinct. This class reports
- * presentation changes; the player decides whether an exit should reveal Play.
+ * Exit is reported only after this video actually entered fullscreen. Request
+ * identities prevent failures from a previous presentation affecting a replay.
  */
 export class VideoFullscreen {
-  /** @brief Video whose standard or WebKit fullscreen presentation is managed. */
   private readonly videoElement: FullscreenVideoElement;
-
-  /** @brief Owning document, used instead of assuming the global document. */
   private readonly pageDocument: Document;
+  private readonly callbacks: FullscreenCallbacks;
+  private entered: boolean = false;
+  private entering: boolean = false;
+  private webkitExitConfirmed: boolean = false;
+  private requestGeneration: number = 0;
+  private exitPending: boolean = false;
+  private disposed: boolean = false;
+
+  private readonly onStandardChange: () => void = (): void => {
+    if (this.pageDocument.fullscreenElement === this.videoElement) {
+      this.reportEntry();
+    } else if (this.entered) {
+      this.reportExit();
+    }
+  };
+  private readonly onWebkitBegin: () => void = (): void => {
+    this.reportEntry();
+  };
+  private readonly onWebkitEnd: () => void = (): void => {
+    this.webkitExitConfirmed = true;
+    if (this.entered) {
+      this.reportExit();
+    } else if (this.entering) {
+      this.settleEntry();
+    }
+  };
 
   /**
-   * @brief Associate fullscreen operations with a video without wiring events.
-   *
-   * @param videoElement Video and source of the owning document.
+   * @brief Bind presentation events exactly once to their actual document owner.
+   * @param videoElement Video itself, never a wrapper, receives fullscreen.
+   * @param callbacks Player policy for actual transitions and request failures.
    */
-  public constructor(videoElement: HTMLVideoElement) {
+  public constructor(
+    videoElement: HTMLVideoElement,
+    callbacks: FullscreenCallbacks,
+  ) {
     this.videoElement = videoElement;
     this.pageDocument = videoElement.ownerDocument;
+    this.callbacks = callbacks;
+    this.pageDocument.addEventListener(
+      "fullscreenchange",
+      this.onStandardChange,
+    );
+    this.videoElement.addEventListener(
+      "webkitbeginfullscreen",
+      this.onWebkitBegin,
+    );
+    this.videoElement.addEventListener("webkitendfullscreen", this.onWebkitEnd);
   }
 
-  /**
-   * @brief Check this video's presentation, including iPhone's native API.
-   *
-   * @return True when this video owns standard fullscreen or WebKit reports it
-   * as displaying fullscreen; another element's fullscreen does not count.
-   */
+  /** @brief Return whether this video currently owns either fullscreen surface. */
   public isFullscreen(): boolean {
     return (
       this.pageDocument.fullscreenElement === this.videoElement ||
-      this.videoElement.webkitDisplayingFullscreen === true
+      (!this.webkitExitConfirmed &&
+        this.videoElement.webkitDisplayingFullscreen === true)
     );
   }
 
-  /**
-   * @brief Observe browser exit signals independently of exit request settlement.
-   *
-   * Call once during player initialization. Notifications can be duplicated or
-   * caused by manual exits; neither signal means that playback has ended.
-   *
-   * @param onExit Callback invoked when a browser event indicates video exit.
-   */
-  public observeExit(onExit: () => void): void {
-    this.pageDocument.addEventListener("fullscreenchange", (): void => {
-      // Ignore entry while this video still owns fullscreen.
-      if (this.pageDocument.fullscreenElement !== this.videoElement) {
-        onExit();
-      }
-    });
-    // Native iPhone fullscreen does not use document.fullscreenElement. Its end
-    // event is authoritative even if the WebKit presentation flag has not updated.
-    this.videoElement.addEventListener("webkitendfullscreen", onExit);
+  /** @brief Return whether an entry request could still reveal the native surface. */
+  public isEntering(): boolean {
+    return this.entering;
   }
 
-  /**
-   * @brief Request fullscreen directly within the original click's activation.
-   *
-   * Must be called without an intervening await in the click handler. Failures
-   * are logged and leave inline playback usable; this does not await entry.
-   */
+  /** @brief Request presentation synchronously in the user's Play activation. */
   public enter(): void {
-    // Fullscreen the video itself so the browser provides its built-in video UI.
-    // Call this directly from the click handler to preserve user activation.
+    if (this.disposed || this.entering || this.isFullscreen()) {
+      return;
+    }
+    const generation: number = ++this.requestGeneration;
+    this.entering = true;
+    this.webkitExitConfirmed = false;
     try {
-      if (this.pageDocument.fullscreenElement) {
-        return;
-      }
-
       if (
         this.pageDocument.fullscreenEnabled &&
         typeof this.videoElement.requestFullscreen === "function"
       ) {
-        void this.videoElement
-          .requestFullscreen({ navigationUI: "hide" })
-          .catch((error: unknown): void => {
-            console.warn("Could not enter fullscreen", error);
-          });
+        void this.videoElement.requestFullscreen({ navigationUI: "hide" }).then(
+          (): void => {
+            if (generation !== this.requestGeneration || this.disposed) {
+              return;
+            }
+            if (this.isFullscreen()) {
+              this.reportEntry();
+            }
+            this.settleEntry();
+          },
+          (): void => {
+            this.failEntry(generation);
+          },
+        );
       } else if (
         typeof this.videoElement.webkitEnterFullscreen === "function"
       ) {
-        // This changes presentation only; Shaka still owns the video stream.
         this.videoElement.webkitEnterFullscreen();
+        // WebKit returns no promise. Its begin/end events own asynchronous
+        // transitions, while its presentation flag covers synchronous entry.
+        if (this.isFullscreen()) {
+          this.reportEntry();
+          this.settleEntry();
+        }
+      } else {
+        this.failEntry(generation);
       }
-    } catch (error: unknown) {
-      console.warn("Could not enter fullscreen", error);
+    } catch {
+      this.failEntry(generation);
     }
   }
 
-  /**
-   * @brief Request this video's fullscreen exit and report request failures.
-   *
-   * Successful request settlement does not confirm exit: observeExit supplies
-   * the browser's actual presentation signal. Does nothing if this video does
-   * not own fullscreen.
-   *
-   * @param onExitFailure Called on a synchronous failure or rejected request,
-   * allowing the caller to abandon only the transition associated with it.
-   */
-  public exit(onExitFailure: () => void): void {
+  /** @brief Request exit once, retaining the surface until actual browser exit. */
+  public exit(): void {
+    if (this.disposed || this.exitPending || !this.isFullscreen()) {
+      return;
+    }
+    // Observing ownership here also covers a browser event still in its queue.
+    this.entered = true;
+    const generation: number = this.requestGeneration;
+    this.exitPending = true;
     try {
       if (this.pageDocument.fullscreenElement === this.videoElement) {
-        // A resolved request is not the lifecycle signal; wait for the exit event.
-        void this.pageDocument
-          .exitFullscreen()
-          .catch((error: unknown): void => {
-            this.handleExitFailure(error, onExitFailure);
-          });
-      } else if (this.videoElement.webkitDisplayingFullscreen) {
-        if (typeof this.videoElement.webkitExitFullscreen !== "function") {
-          throw new Error("Native video fullscreen exit is unavailable.");
-        }
+        void this.pageDocument.exitFullscreen().catch((): void => {
+          this.failExit(generation);
+        });
+      } else if (typeof this.videoElement.webkitExitFullscreen === "function") {
         this.videoElement.webkitExitFullscreen();
+      } else {
+        this.failExit(generation);
       }
-    } catch (error: unknown) {
-      this.handleExitFailure(error, onExitFailure);
+    } catch {
+      this.failExit(generation);
     }
   }
 
-  /**
-   * @brief Log an exit failure and notify the owner of that specific request.
-   *
-   * @param error Synchronous browser failure or asynchronous rejection reason.
-   * @param onExitFailure Callback belonging to the failed exit request.
-   */
-  private handleExitFailure(error: unknown, onExitFailure: () => void): void {
-    console.warn("Could not leave fullscreen", error);
-    onExitFailure();
+  /** @brief Remove presentation listeners when the owning player is replaced. */
+  public dispose(): void {
+    this.disposed = true;
+    this.requestGeneration += 1;
+    this.pageDocument.removeEventListener(
+      "fullscreenchange",
+      this.onStandardChange,
+    );
+    this.videoElement.removeEventListener(
+      "webkitbeginfullscreen",
+      this.onWebkitBegin,
+    );
+    this.videoElement.removeEventListener(
+      "webkitendfullscreen",
+      this.onWebkitEnd,
+    );
+  }
+
+  /** @brief Record actual entry before notifying player stop/return policy. */
+  private reportEntry(): void {
+    if (this.disposed || this.entered) {
+      return;
+    }
+    this.entered = true;
+    this.entering = false;
+    this.callbacks.onEnter();
+  }
+
+  /** @brief Make duplicate browser exit events and old promises harmless. */
+  private reportExit(): void {
+    this.entered = false;
+    this.entering = false;
+    this.exitPending = false;
+    this.requestGeneration += 1;
+    this.callbacks.onExit();
+  }
+
+  /** @brief Release a stop waiting on an entry request that has now settled. */
+  private settleEntry(): void {
+    this.entering = false;
+    this.callbacks.onEntrySettled();
+  }
+
+  /** @brief Surface only a failure belonging to the latest entry attempt. */
+  private failEntry(generation: number): void {
+    if (this.disposed || generation !== this.requestGeneration) {
+      return;
+    }
+    this.entering = false;
+    this.callbacks.onFailure("enter");
+    this.callbacks.onEntrySettled();
+  }
+
+  /** @brief Keep failed automatic exits visible and retryable with native UI. */
+  private failExit(generation: number): void {
+    if (
+      this.disposed ||
+      generation !== this.requestGeneration ||
+      !this.exitPending
+    ) {
+      return;
+    }
+    this.exitPending = false;
+    this.callbacks.onFailure("exit");
   }
 }

@@ -62,3 +62,26 @@ jobs:
       - name: pnpm test
         run: |
           pnpm test
+
+      # Commit the tiny generated fixtures so CI never needs Desktop media,
+      # ffmpeg, Mux availability, or credentials. Linux codecs/dependencies are
+      # installed along with the version-matched Playwright browser binaries.
+      - name: Install Playwright browsers and media dependencies
+        run: pnpm exec playwright install --with-deps chromium firefox webkit chrome
+
+      - name: Production browser tests
+        run: xvfb-run --auto-servernum pnpm test:e2e
+        env:
+          # Chrome's proprietary codecs make H.264/AAC coverage explicit on the
+          # disposable Linux runner. Local browser installations are untouched.
+          PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
+
+      - name: Upload browser failure traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failures
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

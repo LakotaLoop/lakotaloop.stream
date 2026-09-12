@@ -28,11 +28,14 @@
     "clean": "rm -rf dist node_modules",
     "dev": "vite dev --host",
     "format": "prettier --write . && eslint --fix .",
+    "import:content": "python3 scripts/import-content.py",
     "lint": "prettier --check . && eslint .",
     "preview": "vite preview",
     "push": "pnpm build && gh-pages --branch main --repo git@github.com-eigendude:LakotaLoop/lakotaloop.github.io.git --dist dist --dotfiles",
     "start": "vite",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
     "test:ui": "vitest --ui"
   },
   "dependencies": {
@@ -40,6 +43,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^26.5.0",
     "@typescript-eslint/eslint-plugin": "^8.70.0",
     "@typescript-eslint/parser": "^8.70.0",

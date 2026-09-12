@@ -7,283 +7,340 @@
  */
 
 import { ShakaStreamLoader } from "./ShakaStreamLoader";
+import type { PlaybackSource, PlaybackState, PlayerSnapshot } from "./types";
 import { VideoFullscreen } from "./VideoFullscreen";
 
 /**
- * @brief Coordinate playback and presentation for a single video.
+ * @brief Coordinate selected-source preparation and one native viewing session.
  *
- * Owns the Play/Retry UI and delegates stream preparation and native
- * fullscreen handling to dedicated collaborators. The caller selects the
- * stream; native controls retain responsibility for pause and seeking.
+ * Preparing never plays. Start invokes play and fullscreen before returning to
+ * preserve user activation. Stop silences immediately but retains the surface
+ * until confirmed fullscreen exit; native Pause never ends a viewing session.
  */
 export class VideoPlayer {
-  /** @brief Video whose visibility, sound, and native controls are coordinated. */
   private readonly videoElement: HTMLVideoElement;
-
-  /** @brief Page action used for initial playback, replay, and retry. */
-  private readonly playButton: HTMLButtonElement;
-
-  /** @brief Prepares the stream and retains its Shaka instance across retries. */
+  private readonly onStateChange: (errSnapshot: PlayerSnapshot) => void;
   private readonly streamLoader: ShakaStreamLoader;
-
-  /** @brief Browser presentation collaborator, independent of playback policy. */
   private readonly fullscreen: VideoFullscreen;
+  private source: PlaybackSource | null = null;
+  private pendingSource: PlaybackSource | null | undefined = undefined;
+  private state: PlaybackState = "idle";
+  private message: string = "";
+  private loaded: boolean = false;
+  private generation: number = 0;
+  private disposed: boolean = false;
+  private disposal: Promise<void> | null = null;
+  private onStopForDisposal: (() => void) | null = null;
+  private returnError: boolean = false;
+  private returnMessage: string = "";
+
+  private readonly onPlaying: () => void = (): void => {
+    // A play promise or media event may arrive after Stop. It must not restore
+    // audio or UI; an active new session remains in charge of the shared video.
+    if (this.state !== "playing") {
+      this.videoElement.pause();
+    }
+  };
+  private readonly onEnded: () => void = (): void => {
+    // A queued old-source event must not stop a newer viewing session. Native
+    // ended describes the current source, and resets when replay seeks to zero.
+    if (this.state === "playing" && this.videoElement.ended) {
+      this.stop();
+    }
+  };
+  private readonly onVideoError: () => void = (): void => {
+    // load() clears the native error field. Do not interpret a queued event
+    // whose error has already disappeared as a fault in the next source.
+    if (
+      this.videoElement.error !== null &&
+      (this.state === "playing" || this.state === "ready")
+    ) {
+      this.handlePlaybackError(this.videoElement.error);
+    }
+  };
 
   /**
-   * @brief Whether playback can start without awaiting stream preparation.
-   *
-   * Normal completion and permission failures preserve the prepared stream;
-   * other playback failures invalidate it so the next attempt loads again.
-   */
-  private streamLoaded: boolean = false;
-
-  /**
-   * @brief Identity of the idle transition waiting for an actual fullscreen exit.
-   *
-   * Null means no return to Play/Retry is pending. Each request gets an identity
-   * so a late exit failure cannot cancel a newer transition after the user has
-   * resumed or replayed the video.
-   */
-  private pendingIdleTransition: object | null = null;
-
-  /** @brief Guards event wiring and initial preparation against repeated setup. */
-  private initialized: boolean = false;
-
-  /**
-   * @brief Establish dependencies without wiring listeners or preparing media.
-   *
-   * @param videoElement Video controlled by this instance.
-   * @param playButton Button exposing the page's Play/Retry action.
-   * @param streamUrl Stream selected by the caller for this video.
+   * @brief Bind one video's lifecycle without preparing or playing any movie.
+   * @param videoElement Shared video element with browser-native controls.
+   * @param onStateChange Receives immutable snapshots for the browsing UI.
    */
   public constructor(
     videoElement: HTMLVideoElement,
-    playButton: HTMLButtonElement,
-    streamUrl: string,
+    onStateChange: (errSnapshot: PlayerSnapshot) => void,
   ) {
     this.videoElement = videoElement;
-    this.playButton = playButton;
+    this.onStateChange = onStateChange;
     this.streamLoader = new ShakaStreamLoader(
       videoElement,
-      streamUrl,
       (error: unknown): void => {
         this.handlePlaybackError(error);
       },
     );
-    this.fullscreen = new VideoFullscreen(videoElement);
+    this.fullscreen = new VideoFullscreen(videoElement, {
+      onEnter: (): void => {
+        if (this.state === "stopping") {
+          this.fullscreen.exit();
+        } else if (this.state !== "playing") {
+          this.stop();
+        }
+      },
+      onExit: (): void => {
+        if (this.state === "playing") {
+          this.stop();
+        } else if (this.state === "stopping") {
+          this.finishStop();
+        }
+      },
+      onEntrySettled: (): void => {
+        if (this.state === "stopping" && !this.fullscreen.isFullscreen()) {
+          this.finishStop();
+        }
+      },
+      onFailure: (operation: "enter" | "exit"): void => {
+        if (operation === "enter" && this.state === "playing") {
+          this.update(
+            "playing",
+            "Fullscreen is unavailable. Watch here, or try Fullscreen again.",
+          );
+        } else if (operation === "exit" && this.state === "stopping") {
+          this.update(
+            "playing",
+            "Could not exit fullscreen. Use native Done or exit, or try Return again.",
+          );
+        }
+      },
+    });
+    videoElement.addEventListener("playing", this.onPlaying);
+    videoElement.addEventListener("ended", this.onEnded);
+    videoElement.addEventListener("error", this.onVideoError);
   }
 
   /**
-   * @brief Wire native events once and begin preparing the hidden video.
-   *
-   * Returns before preparation finishes. Play remains disabled until preparation
-   * settles; failures expose Retry. Repeated calls do not add listeners or loads.
-   * Arrow callbacks preserve this instance when invoked by DOM or collaborators.
+   * @brief Prepare only the selected source without waiting to update browsing UI.
+   * @param source Selected movie URL, or null for an unavailable configuration.
    */
-  public initialize(): void {
-    if (this.initialized) {
+  public prepare(source: PlaybackSource | null): void {
+    if (this.disposed || this.disposal !== null) {
       return;
     }
-    this.initialized = true;
-
-    this.fullscreen.observeExit((): void => {
-      this.handleFullscreenExit();
-    });
-    this.videoElement.addEventListener("playing", (): void => {
-      this.handlePlaying();
-    });
-    this.videoElement.addEventListener("ended", (): void => {
-      this.handleEnded();
-    });
-    this.videoElement.addEventListener("error", (): void => {
-      this.handlePlaybackError(this.videoElement.error);
-    });
-    this.playButton.addEventListener("click", (): void => {
-      this.handlePlayClick();
-    });
-
-    this.prepareStream();
-  }
-
-  /**
-   * @brief Prepare the hidden video before enabling the original play gesture.
-   *
-   * Handles loading failures through the shared Retry path. Preparation stays
-   * outside the eventual click so a ready stream can play without a network wait.
-   */
-  private prepareStream(): void {
-    // Prepare the hidden video before enabling play so the eventual click calls
-    // play() directly, without first awaiting the stream's network load.
-    this.playButton.disabled = true;
-    void this.streamLoader
-      .load()
-      .then((): void => {
-        this.streamLoaded = true;
-      })
-      .catch((error: unknown): void => {
-        this.handlePlaybackError(error);
-      })
-      .finally((): void => {
-        this.playButton.disabled = false;
-      });
-  }
-
-  /**
-   * @brief Return to the black screen once inline presentation is available.
-   *
-   * Clearing the pending identity before changing the UI makes duplicate exit
-   * notifications harmless. Stream preparation survives this presentation change.
-   */
-  private showPlayButton(): void {
-    this.pendingIdleTransition = null;
-    // Recreate native controls on the next Play against the visible video.
-    this.videoElement.controls = false;
-    this.videoElement.style.visibility = "hidden";
-    this.playButton.hidden = false;
-  }
-
-  /**
-   * @brief Preserve the browser's video surface until it finishes leaving fullscreen.
-   *
-   * Inline playback returns to Play/Retry immediately. Fullscreen requests are
-   * deduplicated until an actual exit, resumed playback, or request failure.
-   */
-  private requestIdleTransition(): void {
-    if (this.pendingIdleTransition !== null) {
+    // Selection remains mutable while fullscreen is leaving. Even a return to
+    // the loaded movie must replace an earlier queued selection before dedup.
+    if (this.state === "stopping" || this.pendingSource !== undefined) {
+      this.pendingSource = source;
+      this.stop();
       return;
     }
-    if (!this.fullscreen.isFullscreen()) {
-      this.showPlayButton();
+    const sameSource: boolean =
+      source !== null &&
+      this.source !== null &&
+      source.id === this.source.id &&
+      source.url === this.source.url &&
+      source.kind === this.source.kind;
+    if (sameSource && (this.loaded || this.state === "preparing")) {
       return;
     }
-
-    const idleTransition: object = {};
-    this.pendingIdleTransition = idleTransition;
-    this.fullscreen.exit((): void => {
-      // Failed exits leave the native UI usable. A later manual exit must not
-      // apply this abandoned transition to playback that the user has resumed.
-      if (this.pendingIdleTransition === idleTransition) {
-        this.pendingIdleTransition = null;
-      }
-    });
-  }
-
-  /**
-   * @brief Pause failed playback and make Retry available when presentation allows.
-   *
-   * @param error Media, Shaka, preparation, or play failure. NotAllowedError
-   * preserves the prepared stream so a new click can retry with user activation.
-   */
-  private handlePlaybackError(error: unknown): void {
-    console.error("Video playback failed", error);
-    // Permission failures leave the prepared stream usable. The next click can
-    // call play() immediately, preserving the gesture Safari requires for audio.
-    if (!(error instanceof Error && error.name === "NotAllowedError")) {
-      this.streamLoaded = false;
+    if (this.state === "playing") {
+      this.pendingSource = source;
+      this.stop();
+      return;
     }
-    this.videoElement.pause();
-    this.requestIdleTransition();
-    this.playButton.disabled = false;
-    this.playButton.setAttribute(
-      "aria-label",
-      "Retry video playback with sound",
+    const generation: number = ++this.generation;
+    this.source = source;
+    this.loaded = false;
+    this.returnError = false;
+    this.returnMessage = "";
+    if (source === null) {
+      this.streamLoader.cancel();
+      this.update("error", "Playback is not configured for this movie.");
+      return;
+    }
+    this.update("preparing", "Preparing video…");
+    void this.streamLoader.load(source).then(
+      (): void => {
+        if (generation !== this.generation || this.disposed) {
+          return;
+        }
+        this.loaded = true;
+        this.update("ready");
+      },
+      (error: unknown): void => {
+        if (generation === this.generation && !this.disposed) {
+          this.handlePlaybackError(error);
+        }
+      },
     );
-    this.playButton.title = "Playback failed. Click to try again.";
   }
 
   /**
-   * @brief Start playback with sound, reloading only after a fatal failure.
+   * @brief Start ready playback, or retry preparation for a later fresh gesture.
    *
-   * A prepared stream reaches play() before the first await, preserving the
-   * click's activation. Native Pause-related AbortError keeps controls usable.
-   *
-   * @return Promise fulfilled after play settles or a load/play failure has been
-   * handled, with the button reenabled. Load and play failures are consumed;
-   * an unexpected exception from failure handling or button cleanup rejects it.
+   * Also exposes a fullscreen retry from inline playback. There is no await,
+   * import, or source switch before either gesture-dependent browser operation.
    */
-  private async startPlayback(): Promise<void> {
-    // Prevent duplicate loads while preparing a failed stream for retry.
-    this.playButton.disabled = true;
-
-    try {
-      if (!this.streamLoaded) {
-        await this.streamLoader.load();
-        this.streamLoaded = true;
-      }
-
-      // Every explicit start includes sound, regardless of old mute settings.
-      this.videoElement.muted = false;
-      this.videoElement.volume = 1;
-      await this.videoElement.play();
-    } catch (error: unknown) {
-      // Native Pause can cancel play() while frames are still buffering. Keep
-      // the video and controls visible so the user can resume normally.
-      if (
-        error instanceof DOMException &&
-        error.name === "AbortError" &&
-        this.videoElement.paused &&
-        this.videoElement.error === null
-      ) {
-        return;
-      }
-      this.handlePlaybackError(error);
-    } finally {
-      this.playButton.disabled = false;
+  public start(): void {
+    if (
+      this.disposed ||
+      this.disposal !== null ||
+      this.state === "preparing" ||
+      this.state === "stopping"
+    ) {
+      return;
     }
-  }
-
-  /**
-   * @brief Complete only an idle transition still pending when exit is reported.
-   *
-   * Manual fullscreen exit does not mean playback ended and leaves native UI
-   * visible. Clearing pending state before UI changes makes duplicates harmless.
-   */
-  private handleFullscreenExit(): void {
-    // Manual exits during active playback do not request an idle screen. Clear
-    // the pending state before changing the UI so duplicate signals are harmless.
-    if (this.pendingIdleTransition !== null) {
-      this.showPlayButton();
+    if (this.state === "playing") {
+      this.fullscreen.enter();
+      return;
     }
-  }
-
-  /**
-   * @brief Cancel pending idle work and clear Retry messaging on successful play.
-   *
-   * Native controls handle pause and seeking without hiding the video. This also
-   * handles a native-controls resume while an earlier fullscreen exit is pending.
-   */
-  private handlePlaying(): void {
-    this.pendingIdleTransition = null;
-    this.playButton.removeAttribute("title");
-    this.playButton.setAttribute("aria-label", "Play video with sound");
-  }
-
-  /**
-   * @brief Request the idle presentation and rewind for immediate prepared replay.
-   */
-  private handleEnded(): void {
-    this.requestIdleTransition();
-    // Keep Shaka's prepared stream so the next click can replay immediately.
-    this.videoElement.currentTime = 0;
-  }
-
-  /**
-   * @brief Reveal native UI and request sound and fullscreen in the click handler.
-   *
-   * Calling startPlayback without awaiting it keeps fullscreen within the same
-   * user activation, even when playback is still buffering or a retry must load.
-   */
-  private handlePlayClick(): void {
-    this.pendingIdleTransition = null;
-    // Firefox builds its native controls when controls is enabled. Reveal the
-    // video first so the controls initialize against the visible layout.
+    if (!this.loaded) {
+      if (this.source !== null) {
+        this.prepare(this.source);
+      }
+      return;
+    }
+    const generation: number = ++this.generation;
+    this.returnError = false;
+    this.returnMessage = "";
+    // Notify the browsing owner first so its containing surface is laid out.
+    // Firefox creates native controls when enabled: reveal before that setter.
+    this.update("playing");
     this.videoElement.style.visibility = "visible";
     this.videoElement.controls = true;
-    this.playButton.hidden = true;
+    this.videoElement.muted = false;
+    this.videoElement.volume = 1;
+    try {
+      const playback: Promise<void> = this.videoElement.play();
+      this.fullscreen.enter();
+      void playback.then(
+        (): void => {
+          if (generation !== this.generation && this.state !== "playing") {
+            this.videoElement.pause();
+          }
+        },
+        (error: unknown): void => {
+          if (generation !== this.generation || this.disposed) {
+            return;
+          }
+          if (
+            error instanceof DOMException &&
+            error.name === "AbortError" &&
+            this.videoElement.paused &&
+            this.videoElement.error === null
+          ) {
+            return;
+          }
+          this.handlePlaybackError(error);
+        },
+      );
+    } catch (error: unknown) {
+      this.handlePlaybackError(error);
+    }
+  }
 
-    // Start audio first, then request fullscreen in this same click handler.
-    // Awaiting playback here would lose the gesture needed for fullscreen.
-    void this.startPlayback();
-    this.fullscreen.enter();
+  /** @brief Silence now and return only after actual native fullscreen exit. */
+  public stop(): void {
+    if (this.disposed || this.state === "stopping") {
+      return;
+    }
+    this.generation += 1;
+    this.videoElement.pause();
+    if (this.state === "preparing") {
+      this.streamLoader.cancel();
+      this.loaded = false;
+    }
+    this.update("stopping", this.returnMessage);
+    if (this.fullscreen.isFullscreen()) {
+      this.fullscreen.exit();
+    } else if (!this.fullscreen.isEntering()) {
+      this.finishStop();
+    }
+  }
+
+  /** @brief Return a detached snapshot safe for the browsing controller to retain. */
+  public getSnapshot(): PlayerSnapshot {
+    return {
+      state: this.state,
+      sourceId: this.source?.id ?? null,
+      message: this.message,
+    };
+  }
+
+  /**
+   * @brief Release media and listeners when this controller's owner is removed.
+   *
+   * Stop preserves fullscreen until the browser exits; no hidden video is
+   * created by disposal. The caller keeps its native surface until that exit.
+   */
+  public dispose(): Promise<void> {
+    if (this.disposal !== null) {
+      return this.disposal;
+    }
+    this.pendingSource = undefined;
+    const stopped: Promise<void> = new Promise<void>(
+      (resolve: () => void): void => {
+        this.onStopForDisposal = resolve;
+      },
+    );
+    // Keep lifecycle listeners and the loaded source until the native surface
+    // really exits. A failed exit remains recoverable through native Done.
+    this.disposal = stopped.then(async (): Promise<void> => {
+      this.disposed = true;
+      this.generation += 1;
+      this.videoElement.removeEventListener("playing", this.onPlaying);
+      this.videoElement.removeEventListener("ended", this.onEnded);
+      this.videoElement.removeEventListener("error", this.onVideoError);
+      this.fullscreen.dispose();
+      await this.streamLoader.dispose();
+    });
+    this.stop();
+    return this.disposal;
+  }
+
+  /** @brief Commit return state after the native surface no longer owns fullscreen. */
+  private finishStop(): void {
+    this.videoElement.controls = false;
+    this.videoElement.style.visibility = "hidden";
+    if (this.loaded) {
+      this.videoElement.currentTime = 0;
+    }
+    const returnState: PlaybackState = this.returnError
+      ? "error"
+      : this.loaded
+        ? "ready"
+        : "idle";
+    this.update(returnState, this.returnMessage);
+    this.onStopForDisposal?.();
+    this.onStopForDisposal = null;
+    if (this.pendingSource !== undefined) {
+      const source: PlaybackSource | null = this.pendingSource;
+      this.pendingSource = undefined;
+      this.prepare(source);
+    }
+  }
+
+  /**
+   * @brief Keep permission failures prepared; invalidate fatal playback failures.
+   * @param error Current session's play, media, Shaka, or preparation failure.
+   */
+  private handlePlaybackError(error: unknown): void {
+    if (this.disposed) {
+      return;
+    }
+    const denied: boolean =
+      error instanceof Error && error.name === "NotAllowedError";
+    if (!denied) {
+      this.loaded = false;
+      this.streamLoader.cancel();
+    }
+    this.returnError = !denied;
+    this.returnMessage = denied
+      ? "Select Play again to allow playback with sound."
+      : "Video could not be loaded. Select Retry to prepare it again.";
+    this.stop();
+  }
+
+  /** @brief Publish state after all invariants needed by the view are established. */
+  private update(state: PlaybackState, message: string = ""): void {
+    this.state = state;
+    this.message = message;
+    this.onStateChange(this.getSnapshot());
   }
 }

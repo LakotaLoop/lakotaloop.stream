@@ -1,0 +1,28 @@
+[
+  {
+    "id": "sunday-intro",
+    "title": "Sunday Intro",
+    "tagline": "Thank you!",
+    "plot": "99 hard-working actors. We appreciate your hard,\namazing work.",
+    "studio": "Lakota Loop",
+    "durationSeconds": 254.287375,
+    "width": 1920,
+    "height": 1080,
+    "fanart": "/movies/sunday-intro/LL Intro-fanart.jpg",
+    "landscape": "/movies/sunday-intro/LL Intro-landscape.jpg",
+    "sourceBasename": "LL Intro"
+  },
+  {
+    "id": "halloween-2025",
+    "title": "Lakota Loop Halloween 2025 Rough Cut",
+    "tagline": "",
+    "plot": "Preliminary cut for review purposes.",
+    "studio": "Lakota Loop",
+    "durationSeconds": 1087.530667,
+    "width": 3840,
+    "height": 2160,
+    "fanart": "/movies/halloween-2025/HALLOWEEN_2025_LakotaLoop_92_Rough-Cut-1-fanart.jpg",
+    "landscape": "/movies/halloween-2025/HALLOWEEN_2025_LakotaLoop_92_Rough-Cut-1-landscape.jpg",
+    "sourceBasename": "HALLOWEEN_2025_LakotaLoop_92_Rough-Cut-1"
+  }
+]
